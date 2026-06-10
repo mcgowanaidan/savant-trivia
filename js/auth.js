@@ -20,13 +20,20 @@ export async function logout() {
 }
 
 export async function registerUser(email, password, displayName, role) {
+  const validRole = (role === "commissioner") ? "commissioner" : "player";
   const cred = await createUserWithEmailAndPassword(auth, email, password);
-  await setDoc(doc(db, "users", cred.user.uid), {
-    displayName,
-    email,
-    role, // "commissioner" or "player"
+  const uid = cred.user.uid;
+  const userData = {
+    displayName: displayName,
+    email: email,
+    role: validRole,
     createdAt: new Date().toISOString()
-  });
+  };
+  await setDoc(doc(db, "users", uid), userData);
+  const verify = await getDoc(doc(db, "users", uid));
+  if (!verify.exists() || verify.data().role !== validRole) {
+    await setDoc(doc(db, "users", uid), userData);
+  }
   return cred.user;
 }
 
