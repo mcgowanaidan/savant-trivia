@@ -5,6 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Dashboard — The Savant Trivia</title>
   <link rel="stylesheet" href="styles.css" />
+  <style>
+    .league-switcher { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:20px; align-items:center; }
+    .league-tab { font-size:12px; font-weight:500; padding:6px 14px; border-radius:20px; border:1px solid var(--border); background:#fff; color:var(--text-muted); cursor:pointer; }
+    .league-tab.active { background:var(--navy); color:#fff; border-color:var(--navy); }
+    .league-tab.add { border-style:dashed; color:var(--teal); border-color:var(--teal); }
+    .invite-strip { background:var(--navy); border-radius:var(--radius); padding:12px 16px; display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; }
+    .invite-strip-url { font-size:12px; color:#9ba5c0; font-family:monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; margin:0 12px; }
+    .invite-copy-btn { background:var(--teal); color:#0a1a12; border:none; border-radius:var(--radius); font-size:11px; font-weight:600; padding:5px 12px; cursor:pointer; white-space:nowrap; flex-shrink:0; }
+  </style>
 </head>
 <body>
   <div id="main-nav"></div>
@@ -16,9 +25,20 @@
         <div class="page-title" id="page-title">Dashboard</div>
         <div class="page-subtitle" id="page-subtitle">Loading league info...</div>
       </div>
-      <div style="display:flex;gap:10px;align-items:center;">
-        <a href="schedule.html" class="btn">Schedule availability</a>
+      <div style="display:flex;gap:10px;align-items:center;" id="header-actions">
+        <a href="schedule.html" class="btn">Schedule</a>
         <a href="scoreboard.html" class="btn btn-dark" id="start-session-btn" style="display:none;text-decoration:none;">Start session →</a>
+      </div>
+    </div>
+
+    <!-- LEAGUE SWITCHER (commissioner) -->
+    <div id="league-switcher-wrap" style="display:none;">
+      <div class="league-switcher" id="league-tabs"></div>
+      <!-- INVITE STRIP -->
+      <div class="invite-strip" id="invite-strip" style="display:none;">
+        <span style="font-size:12px;color:#9ba5c0;white-space:nowrap;">Invite link</span>
+        <span class="invite-strip-url" id="invite-strip-url"></span>
+        <button class="invite-copy-btn" onclick="copyInvite()">Copy</button>
       </div>
     </div>
 
@@ -36,15 +56,7 @@
           <span class="pill pill-teal">Playoff line: 6th</span>
         </div>
         <table id="standings-table">
-          <thead>
-            <tr>
-              <th style="width:20px;">#</th>
-              <th>Team</th>
-              <th style="text-align:right;">W-L</th>
-              <th style="text-align:right;">Pts</th>
-              <th style="text-align:right;">Streak</th>
-            </tr>
-          </thead>
+          <thead><tr><th style="width:20px;">#</th><th>Team</th><th style="text-align:right;">W-L</th><th style="text-align:right;">Pts</th><th style="text-align:right;">Streak</th></tr></thead>
           <tbody id="standings-body">
             <tr><td colspan="5" style="color:var(--text-muted);text-align:center;padding:20px;">Loading...</td></tr>
           </tbody>
@@ -65,124 +77,186 @@
       </div>
     </div>
 
-    <!-- Commissioner panel -->
+    <!-- COMMISSIONER PANEL -->
     <div id="commissioner-panel" style="display:none;margin-top:8px;">
       <div class="section-label">Commissioner tools</div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
         <a href="admin-league.html" class="card" style="text-decoration:none;cursor:pointer;">
           <div style="font-size:13px;font-weight:600;margin-bottom:4px;">Manage league</div>
-          <div style="font-size:12px;color:var(--text-muted);">Teams, season settings, niche categories</div>
+          <div style="font-size:12px;color:var(--text-muted);">Teams, rosters, season settings</div>
         </a>
         <a href="questions-admin.html" class="card" style="text-decoration:none;cursor:pointer;">
           <div style="font-size:13px;font-weight:600;margin-bottom:4px;">Load questions</div>
-          <div style="font-size:12px;color:var(--text-muted);">Load this week's questions by category</div>
+          <div style="font-size:12px;color:var(--text-muted);">Load this week's questions</div>
         </a>
         <a href="scoreboard.html" class="card" style="text-decoration:none;cursor:pointer;">
           <div style="font-size:13px;font-weight:600;margin-bottom:4px;">Live scoreboard</div>
           <div style="font-size:12px;color:var(--text-muted);">Run a live game session</div>
+        </a>
+        <a href="create-league.html" class="card" style="text-decoration:none;cursor:pointer;border-style:dashed;border-color:var(--teal);">
+          <div style="font-size:13px;font-weight:600;margin-bottom:4px;color:var(--teal);">+ Create new league</div>
+          <div style="font-size:12px;color:var(--text-muted);">Set up another league</div>
         </a>
       </div>
     </div>
   </div>
 
   <script type="module">
-    import { renderNav, } from "./js/app.js";
+    import { renderNav } from "./js/app.js";
     import { auth, db } from "./js/firebase-config.js";
     import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-    import { doc, getDoc, collection, getDocs, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+    import { doc, getDoc, collection, getDocs, query, orderBy, limit, where } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
     renderNav("dashboard");
 
     const COLORS = ["av-a","av-b","av-c","av-d","av-e"];
+    let activeLeagueId = null;
+    let userRole = null;
 
     onAuthStateChanged(auth, async user => {
-      if (!user) {
-        loadPublicView();
-        return;
-      }
+      if (!user) { loadPublicView(); return; }
       const snap = await getDoc(doc(db, "users", user.uid));
       const profile = snap.exists() ? snap.data() : {};
-      const role = profile.role || "player";
+      userRole = profile.role || "player";
 
-      if (role === "commissioner") {
+      if (userRole === "commissioner") {
         document.getElementById("start-session-btn").style.display = "inline-block";
         document.getElementById("commissioner-panel").style.display = "block";
+        document.getElementById("league-switcher-wrap").style.display = "block";
+        await loadCommissionerLeagues(user.uid);
+      } else {
+        await loadPlayerView(user.uid, profile);
       }
-
-      loadDashboardData(user.uid, role);
     });
 
-    async function loadDashboardData(uid, role) {
+    async function loadCommissionerLeagues(uid) {
+      const snap = await getDocs(query(collection(db, "leagues"), where("commissionerId","==",uid)));
+      const leagues = [];
+      snap.forEach(d => leagues.push({ id: d.id, ...d.data() }));
+
+      const tabsEl = document.getElementById("league-tabs");
+
+      if (!leagues.length) {
+        tabsEl.innerHTML = `<a href="create-league.html" class="league-tab add">+ Create your first league</a>`;
+        document.getElementById("page-title").textContent = "Welcome, commissioner";
+        document.getElementById("page-subtitle").textContent = "Create your first league to get started";
+        clearDashboard();
+        return;
+      }
+
+      tabsEl.innerHTML = leagues.map((l, i) =>
+        `<button class="league-tab${i===0?' active':''}" onclick="switchLeague('${l.id}','${l.name}')">${l.name}</button>`
+      ).join("") + `<a href="create-league.html" class="league-tab add">+ New league</a>`;
+
+      // Default to first league
+      activeLeagueId = leagues[0].id;
+      window._leagues = leagues;
+      setInviteStrip(leagues[0].id);
+      await loadLeagueDashboard(leagues[0].id, leagues[0]);
+    }
+
+    window.switchLeague = async function(id, name) {
+      activeLeagueId = id;
+      document.querySelectorAll(".league-tab").forEach(b => b.classList.remove("active"));
+      event.target.classList.add("active");
+      const league = window._leagues?.find(l => l.id === id);
+      setInviteStrip(id);
+      if (league) await loadLeagueDashboard(id, league);
+    };
+
+    function setInviteStrip(leagueId) {
+      const url = `${window.location.origin}/join.html?league=${leagueId}`;
+      document.getElementById("invite-strip").style.display = "flex";
+      document.getElementById("invite-strip-url").textContent = url;
+      window._currentInviteUrl = url;
+    }
+
+    window.copyInvite = function() {
+      navigator.clipboard.writeText(window._currentInviteUrl || "");
+      const btn = document.querySelector(".invite-copy-btn");
+      btn.textContent = "Copied!";
+      setTimeout(() => btn.textContent = "Copy", 2000);
+    };
+
+    async function loadLeagueDashboard(leagueId, leagueInfo) {
+      document.getElementById("page-title").textContent = leagueInfo.name || "Dashboard";
+      document.getElementById("page-subtitle").textContent = `Season ${leagueInfo.season||1} · ${leagueInfo.seasonLength||10} weeks`;
+
       try {
-        const teamsSnap = await getDocs(query(collection(db, "teams"), orderBy("wins", "desc")));
+        const teamsSnap = await getDocs(query(collection(db, "leagues", leagueId, "teams"), orderBy("wins","desc")));
         const teams = [];
         teamsSnap.forEach(d => teams.push({ id: d.id, ...d.data() }));
 
-        if (teams.length === 0) {
+        if (!teams.length) {
           document.getElementById("standings-body").innerHTML =
-            `<tr><td colspan="5" style="color:var(--text-muted);text-align:center;padding:20px;">No teams yet. Commissioner can add teams.</td></tr>`;
+            `<tr><td colspan="5" style="color:var(--text-muted);text-align:center;padding:20px;">No teams yet. <a href="admin-league.html" style="color:var(--teal);">Add teams →</a></td></tr>`;
+          clearMatchups();
           return;
         }
 
-        // Metrics
-        if (teams[0]) document.getElementById("m-leader").textContent = teams[0].name || "—";
+        if (teams[0]) document.getElementById("m-leader").textContent = teams[0].name;
 
-        // Standings
-        const ranks = ["g","s","b","","","",""];
         const tbody = teams.slice(0,6).map((t, i) => {
           const streak = t.streak > 0 ? `<span style="color:#3B6D11;">W${t.streak}</span>` : t.streak < 0 ? `<span style="color:#A32D2D;">L${Math.abs(t.streak)}</span>` : "—";
           const av = COLORS[i % COLORS.length];
-          const initials = (t.name || "??").substring(0,2).toUpperCase();
           return `<tr>
-            <td class="rank ${ranks[i]}">${i+1}</td>
-            <td><div style="display:flex;align-items:center;gap:8px;"><div class="av ${av}">${initials}</div>${t.name}</div></td>
+            <td class="rank ${["g","s","b","","",""][i]||""}">${i+1}</td>
+            <td><div style="display:flex;align-items:center;gap:8px;"><div class="av ${av}">${(t.name||"??").substring(0,2).toUpperCase()}</div>${t.name}</div></td>
             <td style="text-align:right;">${t.wins||0}-${t.losses||0}</td>
             <td style="text-align:right;font-weight:600;">${t.pointsFor||0}</td>
-            <td style="text-align:right;">${streak}</td>
+            <td style="text-align:right;font-size:12px;">${streak}</td>
           </tr>`;
         }).join("");
-        document.getElementById("standings-body").innerHTML = tbody || `<tr><td colspan="5" style="color:var(--text-muted);text-align:center;padding:20px;">No standings data yet.</td></tr>`;
+        document.getElementById("standings-body").innerHTML = tbody;
 
         // Matchups
-        const matchupsSnap = await getDocs(query(collection(db, "matchups"), orderBy("week", "desc"), limit(6)));
+        const matchupsSnap = await getDocs(query(collection(db, "matchups"), where("leagueId","==",leagueId), where("completed","==",false), limit(6)));
         const matchups = [];
-        matchupsSnap.forEach(d => matchups.push({ id: d.id, ...d.data() }));
-        const currentWeek = matchups[0]?.week || 1;
-        const thisWeek = matchups.filter(m => m.week === currentWeek && !m.completed);
-        document.getElementById("matchups-list").innerHTML = thisWeek.length
-          ? thisWeek.map(m => `
-              <div class="matchup-row">
-                <span style="font-size:13px;">${m.homeTeam} <span style="color:var(--text-muted);padding:0 5px;">vs</span> ${m.awayTeam}</span>
-                <span class="pill pill-blue">${m.scheduledTime || "TBD"}</span>
-              </div>`).join("")
-          : `<div style="font-size:13px;color:var(--text-muted);">No matchups scheduled yet.</div>`;
+        matchupsSnap.forEach(d => matchups.push(d.data()));
+        document.getElementById("matchups-list").innerHTML = matchups.length
+          ? matchups.map(m => `<div class="matchup-row"><span style="font-size:13px;">${m.homeTeam} <span style="color:var(--text-muted);padding:0 5px;">vs</span> ${m.awayTeam}</span><span class="pill pill-blue">${m.scheduledTime||"TBD"}</span></div>`).join("")
+          : `<div style="font-size:13px;color:var(--text-muted);">No matchups scheduled. <a href="schedule.html" style="color:var(--teal);">Generate →</a></div>`;
 
-        // Last results
-        const lastWeek = matchups.filter(m => m.completed);
-        document.getElementById("results-list").innerHTML = lastWeek.slice(0,3).length
-          ? lastWeek.slice(0,3).map(m => `
-              <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:0.5px solid var(--border);font-size:13px;">
-                <span>${m.homeTeam}</span>
-                <div style="display:flex;gap:10px;align-items:center;">
-                  <span style="font-weight:600;color:#3B6D11;">${m.homeScore}</span>
-                  <span style="font-size:11px;color:var(--text-muted);">def.</span>
-                  <span style="font-weight:600;color:#A32D2D;">${m.awayScore}</span>
-                </div>
-                <span>${m.awayTeam}</span>
-              </div>`).join("")
+        // Results
+        const resultsSnap = await getDocs(query(collection(db, "matchups"), where("leagueId","==",leagueId), where("completed","==",true), orderBy("completedAt","desc"), limit(3)));
+        const results = [];
+        resultsSnap.forEach(d => results.push(d.data()));
+        document.getElementById("results-list").innerHTML = results.length
+          ? results.map(m => `<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:0.5px solid var(--border);font-size:13px;"><span>${m.homeTeam}</span><div style="display:flex;gap:10px;"><span style="font-weight:600;color:#3B6D11;">${m.homeScore}</span><span style="font-size:11px;color:var(--text-muted);">def.</span><span style="font-weight:600;color:#A32D2D;">${m.awayScore}</span></div><span>${m.awayTeam}</span></div>`).join("")
           : `<div style="font-size:13px;color:var(--text-muted);">No completed games yet.</div>`;
 
-      } catch(e) {
-        console.error(e);
+      } catch(e) { console.error(e); }
+    }
+
+    async function loadPlayerView(uid, profile) {
+      const leagues = profile.leagues || [];
+      if (!leagues.length) {
+        document.getElementById("page-title").textContent = "Welcome";
+        document.getElementById("page-subtitle").textContent = "Use your invite link to join a league";
+        clearDashboard();
+        return;
       }
+      // Load first league
+      const leagueSnap = await getDoc(doc(db, "leagues", leagues[0]));
+      if (leagueSnap.exists()) {
+        await loadLeagueDashboard(leagues[0], leagueSnap.data());
+      }
+    }
+
+    function clearDashboard() {
+      document.getElementById("standings-body").innerHTML = `<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text-muted);">No data yet.</td></tr>`;
+      clearMatchups();
+    }
+
+    function clearMatchups() {
+      document.getElementById("matchups-list").innerHTML = `<div style="font-size:13px;color:var(--text-muted);">No matchups yet.</div>`;
+      document.getElementById("results-list").innerHTML = `<div style="font-size:13px;color:var(--text-muted);">No results yet.</div>`;
     }
 
     function loadPublicView() {
       document.getElementById("page-title").textContent = "The Savant Trivia";
-      document.getElementById("page-subtitle").textContent = "Sign in to view your league dashboard";
-      document.getElementById("ticker").textContent = "Sign in to see live results and standings";
-      document.getElementById("standings-body").innerHTML =
-        `<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text-muted);"><a href="login.html" style="color:var(--teal);">Sign in</a> to view standings</td></tr>`;
+      document.getElementById("page-subtitle").textContent = "Sign in to view your league";
+      document.getElementById("standings-body").innerHTML = `<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text-muted);"><a href="login.html" style="color:var(--teal);">Sign in</a> to view standings</td></tr>`;
       document.getElementById("matchups-list").innerHTML = `<div style="font-size:13px;color:var(--text-muted);"><a href="login.html" style="color:var(--teal);">Sign in</a> to view matchups</div>`;
       document.getElementById("results-list").innerHTML = `<div style="font-size:13px;color:var(--text-muted);"><a href="login.html" style="color:var(--teal);">Sign in</a> to view results</div>`;
     }

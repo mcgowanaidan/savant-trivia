@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Create League — The Savant Trivia</title>
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    .wizard-wrap { max-width: 580px; margin: 40px auto; }
+    .wizard-card { background: #fff; border-radius: 16px; padding: 36px; border: 0.5px solid var(--border); }
+    .wizard-steps { display: flex; align-items: center; gap: 0; margin-bottom: 32px; }
+    .step-dot { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; flex-shrink: 0; }
+    .step-dot.active { background: var(--navy); color: #fff; }
+    .step-dot.done { background: var(--teal); color: #0a1a12; }
+    .step-dot.pending { background: var(--off-white); color: var(--text-muted); border: 1px solid var(--border); }
+    .step-line { flex: 1; height: 2px; background: var(--border); }
+    .step-line.done { background: var(--teal); }
+    .step-title { font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+    .step-subtitle { font-size: 13px; color: var(--text-muted); margin-bottom: 24px; }
+    .team-block { background: var(--off-white); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 10px; }
+    .team-block-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .team-num { font-size: 12px; font-weight: 600; color: var(--text-muted); }
+    .remove-team { font-size: 11px; color: #dc2626; background: none; border: none; cursor: pointer; }
+    .nav-btns { display: flex; gap: 10px; margin-top: 24px; }
+    .invite-box { background: var(--navy); border-radius: var(--radius); padding: 16px; text-align: center; margin-bottom: 16px; }
+    .invite-url { font-family: monospace; font-size: 13px; color: var(--teal); word-break: break-all; }
+    .copy-btn { background: var(--teal); color: #0a1a12; border: none; border-radius: var(--radius); font-size: 12px; font-weight: 600; padding: 6px 14px; cursor: pointer; margin-top: 10px; }
+    .league-pill-select { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+    .league-pill-opt { font-size: 12px; padding: 6px 14px; border-radius: 20px; border: 1px solid var(--border); background: #fff; color: var(--text-muted); cursor: pointer; }
+    .league-pill-opt.selected { background: var(--navy); color: #fff; border-color: var(--navy); }
+  </style>
+</head>
+<body>
+  <div id="main-nav"></div>
+  <div class="page-wrap">
+    <div class="wizard-wrap">
+
+      <!-- STEP INDICATORS -->
+      <div class="wizard-steps" id="wizard-steps">
+        <div class="step-dot active" id="dot-1">1</div>
+        <div class="step-line" id="line-1"></div>
+        <div class="step-dot pending" id="dot-2">2</div>
+        <div class="step-line" id="line-2"></div>
+        <div class="step-dot pending" id="dot-3">3</div>
+        <div class="step-line" id="line-3"></div>
+        <div class="step-dot pending" id="dot-4">4</div>
+      </div>
+
+      <div class="wizard-card">
+
+        <!-- STEP 1: LEAGUE INFO -->
+        <div id="step-1">
+          <div class="step-title">Name your league</div>
+          <div class="step-subtitle">This is what players will see when they join.</div>
+          <div class="form-group">
+            <label class="form-label">League name</label>
+            <input type="text" class="form-input" id="league-name" placeholder="e.g. Thursday Night League" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Season length</label>
+            <div class="league-pill-select" id="season-length-opts">
+              <div class="league-pill-opt" data-val="8">8 weeks</div>
+              <div class="league-pill-opt selected" data-val="10">10 weeks</div>
+              <div class="league-pill-opt" data-val="12">12 weeks</div>
+              <div class="league-pill-opt" data-val="14">14 weeks</div>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Playoff teams</label>
+            <div class="league-pill-select" id="playoff-opts">
+              <div class="league-pill-opt" data-val="4">4 teams</div>
+              <div class="league-pill-opt selected" data-val="6">6 teams</div>
+              <div class="league-pill-opt" data-val="8">8 teams</div>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Season start date</label>
+            <input type="date" class="form-input" id="start-date" />
+          </div>
+          <div class="form-error" id="err-1"></div>
+          <div class="nav-btns">
+            <button class="btn btn-primary" style="flex:1;" onclick="goStep(2)">Next →</button>
+          </div>
+        </div>
+
+        <!-- STEP 2: ADD TEAMS -->
+        <div id="step-2" style="display:none;">
+          <div class="step-title">Add your teams</div>
+          <div class="step-subtitle">Add each team name, their niche category, and 3 players. You can add more later.</div>
+          <div id="teams-container"></div>
+          <button class="btn" style="width:100%;font-size:13px;" onclick="addTeamBlock()">+ Add another team</button>
+          <div class="form-error" id="err-2"></div>
+          <div class="nav-btns">
+            <button class="btn" onclick="goStep(1)">← Back</button>
+            <button class="btn btn-primary" style="flex:1;" onclick="goStep(3)">Next →</button>
+          </div>
+        </div>
+
+        <!-- STEP 3: REVIEW -->
+        <div id="step-3" style="display:none;">
+          <div class="step-title">Review & create</div>
+          <div class="step-subtitle">Confirm your league details before going live.</div>
+          <div id="review-content" style="margin-bottom:20px;"></div>
+          <div class="form-error" id="err-3"></div>
+          <div class="nav-btns">
+            <button class="btn" onclick="goStep(2)">← Back</button>
+            <button class="btn btn-primary" style="flex:1;" id="create-btn" onclick="createLeague()">Create league →</button>
+          </div>
+        </div>
+
+        <!-- STEP 4: INVITE -->
+        <div id="step-4" style="display:none;">
+          <div class="step-title">League created!</div>
+          <div class="step-subtitle">Share the invite link with your players so they can sign up and join their team.</div>
+          <div class="invite-box">
+            <div style="font-size:11px;color:#4a5568;margin-bottom:8px;letter-spacing:0.05em;text-transform:uppercase;">Invite link</div>
+            <div class="invite-url" id="invite-url">Loading...</div>
+            <button class="copy-btn" onclick="copyInvite()">Copy link</button>
+          </div>
+          <div style="background:#EAF3DE;border-radius:var(--radius);padding:12px 16px;font-size:13px;color:#3B6D11;margin-bottom:16px;">
+            Players who use this link will be prompted to create an account and join your league. You can assign them to teams from the league management page.
+          </div>
+          <div style="display:flex;gap:10px;">
+            <a href="dashboard.html" class="btn" style="flex:1;text-align:center;text-decoration:none;">Go to dashboard</a>
+            <a id="manage-link" href="admin-league.html" class="btn btn-primary" style="flex:1;text-align:center;text-decoration:none;">Manage league →</a>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { renderNav } from "./js/app.js";
+    import { requireCommissioner } from "./js/auth.js";
+    import { auth, db } from "./js/firebase-config.js";
+    import { collection, addDoc, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    requireCommissioner();
+    renderNav("dashboard");
+
+    let currentStep = 1;
+    let seasonLength = 10;
+    let playoffTeams = 6;
+    let teamCount = 0;
+    let createdLeagueId = null;
+
+    // Pill selectors
+    document.getElementById("season-length-opts").addEventListener("click", e => {
+      if (!e.target.dataset.val) return;
+      document.querySelectorAll("#season-length-opts .league-pill-opt").forEach(el => el.classList.remove("selected"));
+      e.target.classList.add("selected");
+      seasonLength = parseInt(e.target.dataset.val);
+    });
+    document.getElementById("playoff-opts").addEventListener("click", e => {
+      if (!e.target.dataset.val) return;
+      document.querySelectorAll("#playoff-opts .league-pill-opt").forEach(el => el.classList.remove("selected"));
+      e.target.classList.add("selected");
+      playoffTeams = parseInt(e.target.dataset.val);
+    });
+
+    // Set default start date to next Monday
+    const nextMon = new Date();
+    nextMon.setDate(nextMon.getDate() + ((1 + 7 - nextMon.getDay()) % 7 || 7));
+    document.getElementById("start-date").value = nextMon.toISOString().split("T")[0];
+
+    window.addTeamBlock = function() {
+      teamCount++;
+      const div = document.createElement("div");
+      div.className = "team-block";
+      div.id = `team-block-${teamCount}`;
+      div.innerHTML = `
+        <div class="team-block-header">
+          <span class="team-num">Team ${teamCount}</span>
+          <button class="remove-team" onclick="removeTeam(${teamCount})">Remove</button>
+        </div>
+        <div class="form-group" style="margin-bottom:8px;">
+          <input type="text" class="form-input" id="tname-${teamCount}" placeholder="Team name (e.g. Quiz Khalifa)" />
+        </div>
+        <div class="form-group" style="margin-bottom:8px;">
+          <input type="text" class="form-input" id="tniche-${teamCount}" placeholder="Niche category (e.g. 90s Hip-Hop)" />
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+          <input type="text" class="form-input" id="tp1-${teamCount}" placeholder="Player 1" style="font-size:12px;" />
+          <input type="text" class="form-input" id="tp2-${teamCount}" placeholder="Player 2" style="font-size:12px;" />
+          <input type="text" class="form-input" id="tp3-${teamCount}" placeholder="Player 3" style="font-size:12px;" />
+        </div>`;
+      document.getElementById("teams-container").appendChild(div);
+    };
+
+    window.removeTeam = function(id) {
+      const el = document.getElementById(`team-block-${id}`);
+      if (el) el.remove();
+    };
+
+    // Add 2 default team blocks
+    addTeamBlock();
+    addTeamBlock();
+
+    window.goStep = function(step) {
+      const err1 = document.getElementById("err-1");
+      const err2 = document.getElementById("err-2");
+
+      if (step === 2) {
+        const name = document.getElementById("league-name").value.trim();
+        if (!name) { err1.textContent = "Please enter a league name."; err1.style.display = "block"; return; }
+        err1.style.display = "none";
+      }
+
+      if (step === 3) {
+        // Validate teams
+        const blocks = document.querySelectorAll(".team-block");
+        if (blocks.length < 2) { err2.textContent = "Add at least 2 teams."; err2.style.display = "block"; return; }
+        let valid = true;
+        blocks.forEach(b => {
+          const id = b.id.split("-")[2];
+          const n = document.getElementById(`tname-${id}`)?.value.trim();
+          if (!n) valid = false;
+        });
+        if (!valid) { err2.textContent = "Please give every team a name."; err2.style.display = "block"; return; }
+        err2.style.display = "none";
+        buildReview();
+      }
+
+      currentStep = step;
+      [1,2,3,4].forEach(s => {
+        document.getElementById(`step-${s}`).style.display = s === step ? "block" : "none";
+        const dot = document.getElementById(`dot-${s}`);
+        if (s < step) { dot.className = "step-dot done"; dot.textContent = "✓"; }
+        else if (s === step) { dot.className = "step-dot active"; dot.textContent = s; }
+        else { dot.className = "step-dot pending"; dot.textContent = s; }
+        if (s < 4) {
+          const line = document.getElementById(`line-${s}`);
+          line.className = "step-line" + (s < step ? " done" : "");
+        }
+      });
+    };
+
+    function buildReview() {
+      const name = document.getElementById("league-name").value.trim();
+      const startDate = document.getElementById("start-date").value;
+      const blocks = document.querySelectorAll(".team-block");
+      const teams = [];
+      blocks.forEach(b => {
+        const id = b.id.split("-")[2];
+        teams.push({
+          name: document.getElementById(`tname-${id}`)?.value.trim() || "",
+          niche: document.getElementById(`tniche-${id}`)?.value.trim() || "",
+          players: [
+            document.getElementById(`tp1-${id}`)?.value.trim(),
+            document.getElementById(`tp2-${id}`)?.value.trim(),
+            document.getElementById(`tp3-${id}`)?.value.trim()
+          ].filter(Boolean)
+        });
+      });
+
+      document.getElementById("review-content").innerHTML = `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
+          <div class="metric"><div class="metric-label">League name</div><div style="font-size:14px;font-weight:600;">${name}</div></div>
+          <div class="metric"><div class="metric-label">Season</div><div style="font-size:14px;font-weight:600;">${seasonLength} weeks · ${playoffTeams}-team playoffs</div></div>
+          <div class="metric"><div class="metric-label">Start date</div><div style="font-size:14px;font-weight:600;">${startDate || "TBD"}</div></div>
+          <div class="metric"><div class="metric-label">Teams</div><div style="font-size:14px;font-weight:600;">${teams.length}</div></div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          ${teams.map(t => `
+            <div style="background:var(--off-white);border-radius:var(--radius);padding:10px 14px;">
+              <div style="font-size:13px;font-weight:600;">${t.name} <span style="font-size:11px;color:var(--text-muted);font-weight:400;">· Niche: ${t.niche||"—"}</span></div>
+              <div style="font-size:12px;color:var(--text-muted);margin-top:3px;">${t.players.join(", ") || "No players added"}</div>
+            </div>`).join("")}
+        </div>`;
+    }
+
+    window.createLeague = async function() {
+      const btn = document.getElementById("create-btn");
+      btn.textContent = "Creating...";
+      btn.disabled = true;
+
+      const name = document.getElementById("league-name").value.trim();
+      const startDate = document.getElementById("start-date").value;
+      const blocks = document.querySelectorAll(".team-block");
+      const teams = [];
+      blocks.forEach(b => {
+        const id = b.id.split("-")[2];
+        teams.push({
+          name: document.getElementById(`tname-${id}`)?.value.trim() || "",
+          niche: document.getElementById(`tniche-${id}`)?.value.trim() || "",
+          players: [
+            document.getElementById(`tp1-${id}`)?.value.trim(),
+            document.getElementById(`tp2-${id}`)?.value.trim(),
+            document.getElementById(`tp3-${id}`)?.value.trim()
+          ].filter(Boolean)
+        });
+      });
+
+      try {
+        const user = auth.currentUser;
+        // Create league doc
+        const leagueRef = await addDoc(collection(db, "leagues"), {
+          name,
+          seasonLength,
+          playoffTeams,
+          startDate,
+          commissionerId: user.uid,
+          createdAt: new Date().toISOString(),
+          season: 1,
+          active: true
+        });
+        createdLeagueId = leagueRef.id;
+
+        // Add teams under this league
+        for (const t of teams) {
+          await addDoc(collection(db, "leagues", leagueRef.id, "teams"), {
+            ...t, wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, streak: 0,
+            createdAt: new Date().toISOString()
+          });
+        }
+
+        // Set invite URL
+        const inviteUrl = `${window.location.origin}/join.html?league=${leagueRef.id}`;
+        document.getElementById("invite-url").textContent = inviteUrl;
+        document.getElementById("manage-link").href = `admin-league.html?league=${leagueRef.id}`;
+        window._inviteUrl = inviteUrl;
+
+        goStep(4);
+      } catch(e) {
+        document.getElementById("err-3").textContent = "Error creating league: " + e.message;
+        document.getElementById("err-3").style.display = "block";
+        btn.textContent = "Create league →";
+        btn.disabled = false;
+      }
+    };
+
+    window.copyInvite = function() {
+      navigator.clipboard.writeText(window._inviteUrl || "");
+      const btn = document.querySelector(".copy-btn");
+      btn.textContent = "Copied!";
+      setTimeout(() => btn.textContent = "Copy link", 2000);
+    };
+  </script>
+</body>
+</html>
