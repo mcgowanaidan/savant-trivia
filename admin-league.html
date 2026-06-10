@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Manage League — The Savant Trivia</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="main-nav"></div>
+
+  <div class="page-wrap">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Manage league</div>
+        <div class="page-subtitle">Commissioner tools — teams, rosters, season settings</div>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <!-- ADD TEAM -->
+      <div>
+        <div class="section-label">Add a team</div>
+        <div class="card" style="margin-bottom:14px;">
+          <div class="form-group">
+            <label class="form-label">Team name</label>
+            <input type="text" class="form-input" id="team-name" placeholder="e.g. Quiz Khalifa" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Niche category</label>
+            <input type="text" class="form-input" id="team-niche" placeholder="e.g. 90s Hip-Hop" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Player 1</label>
+            <input type="text" class="form-input" id="p1" placeholder="Full name" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Player 2</label>
+            <input type="text" class="form-input" id="p2" placeholder="Full name" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Player 3</label>
+            <input type="text" class="form-input" id="p3" placeholder="Full name" />
+          </div>
+          <div class="form-error" id="team-error"></div>
+          <button class="btn btn-primary" style="width:100%;" id="add-team-btn">Add team</button>
+          <div id="team-success" style="display:none;font-size:13px;color:#3B6D11;margin-top:8px;text-align:center;">Team added!</div>
+        </div>
+
+        <div class="section-label">Season settings</div>
+        <div class="card">
+          <div class="form-group">
+            <label class="form-label">League name</label>
+            <input type="text" class="form-input" id="league-name" placeholder="e.g. Thursday Night League" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Season length (weeks)</label>
+            <input type="number" class="form-input" id="season-length" value="10" min="1" max="20" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Playoff teams</label>
+            <select class="form-select" id="playoff-teams">
+              <option value="4">4 teams</option>
+              <option value="6" selected>6 teams</option>
+              <option value="8">8 teams</option>
+            </select>
+          </div>
+          <button class="btn btn-dark" style="width:100%;" id="save-settings-btn">Save settings</button>
+          <div id="settings-success" style="display:none;font-size:13px;color:#3B6D11;margin-top:8px;text-align:center;">Settings saved!</div>
+        </div>
+      </div>
+
+      <!-- TEAM LIST -->
+      <div>
+        <div class="section-label">Registered teams</div>
+        <div class="card">
+          <div id="teams-list"><div style="font-size:13px;color:var(--text-muted);">Loading teams...</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { renderNav } from "./js/app.js";
+    import { requireCommissioner } from "./js/auth.js";
+    import { db } from "./js/firebase-config.js";
+    import { collection, getDocs, addDoc, deleteDoc, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    requireCommissioner();
+    renderNav("dashboard");
+
+    const COLORS = ["av-a","av-b","av-c","av-d","av-e"];
+
+    async function loadTeams() {
+      const snap = await getDocs(collection(db, "teams"));
+      const teams = [];
+      snap.forEach(d => teams.push({ id: d.id, ...d.data() }));
+      document.getElementById("teams-list").innerHTML = teams.length
+        ? teams.map((t, i) => `
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:0.5px solid var(--border);">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div class="av ${COLORS[i%COLORS.length]}">${(t.name||"??").substring(0,2).toUpperCase()}</div>
+              <div>
+                <div style="font-size:13px;font-weight:600;">${t.name}</div>
+                <div style="font-size:11px;color:var(--text-muted);">Niche: ${t.niche||"—"} · Players: ${(t.players||[]).join(", ")||"None"}</div>
+              </div>
+            </div>
+            <button onclick="deleteTeam('${t.id}')" style="font-size:11px;color:#dc2626;background:none;border:none;cursor:pointer;">Remove</button>
+          </div>`).join("")
+        : `<div style="font-size:13px;color:var(--text-muted);">No teams yet. Add the first one.</div>`;
+    }
+    loadTeams();
+
+    document.getElementById("add-team-btn").addEventListener("click", async () => {
+      const name = document.getElementById("team-name").value.trim();
+      const niche = document.getElementById("team-niche").value.trim();
+      const p1 = document.getElementById("p1").value.trim();
+      const p2 = document.getElementById("p2").value.trim();
+      const p3 = document.getElementById("p3").value.trim();
+      const err = document.getElementById("team-error");
+      err.style.display = "none";
+      if (!name || !p1 || !p2 || !p3) {
+        err.textContent = "Team name and all 3 players are required.";
+        err.style.display = "block"; return;
+      }
+      try {
+        await addDoc(collection(db, "teams"), {
+          name, niche, players: [p1, p2, p3],
+          wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, streak: 0,
+          createdAt: new Date().toISOString()
+        });
+        ["team-name","team-niche","p1","p2","p3"].forEach(id => document.getElementById(id).value = "");
+        document.getElementById("team-success").style.display = "block";
+        setTimeout(() => document.getElementById("team-success").style.display = "none", 3000);
+        loadTeams();
+      } catch(e) {
+        err.textContent = "Error adding team."; err.style.display = "block";
+      }
+    });
+
+    window.deleteTeam = async function(id) {
+      if (!confirm("Remove this team? This cannot be undone.")) return;
+      await deleteDoc(doc(db, "teams", id));
+      loadTeams();
+    };
+
+    document.getElementById("save-settings-btn").addEventListener("click", async () => {
+      const settings = {
+        leagueName: document.getElementById("league-name").value.trim(),
+        seasonLength: parseInt(document.getElementById("season-length").value),
+        playoffTeams: parseInt(document.getElementById("playoff-teams").value),
+        updatedAt: new Date().toISOString()
+      };
+      await setDoc(doc(db, "settings", "league"), settings);
+      document.getElementById("settings-success").style.display = "block";
+      setTimeout(() => document.getElementById("settings-success").style.display = "none", 3000);
+    });
+
+    // Load existing settings
+    getDoc(doc(db, "settings", "league")).then(snap => {
+      if (snap.exists()) {
+        const s = snap.data();
+        if (s.leagueName) document.getElementById("league-name").value = s.leagueName;
+        if (s.seasonLength) document.getElementById("season-length").value = s.seasonLength;
+        if (s.playoffTeams) document.getElementById("playoff-teams").value = s.playoffTeams;
+      }
+    });
+  </script>
+</body>
+</html>

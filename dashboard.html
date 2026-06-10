@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard — The Savant Trivia</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="main-nav"></div>
+  <div class="ticker" id="ticker">Loading latest results...</div>
+
+  <div class="page-wrap">
+    <div class="page-header">
+      <div>
+        <div class="page-title" id="page-title">Dashboard</div>
+        <div class="page-subtitle" id="page-subtitle">Loading league info...</div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;">
+        <a href="schedule.html" class="btn">Schedule availability</a>
+        <a href="scoreboard.html" class="btn btn-dark" id="start-session-btn" style="display:none;text-decoration:none;">Start session →</a>
+      </div>
+    </div>
+
+    <div class="metric-grid" id="metric-grid">
+      <div class="metric"><div class="metric-label">Season leader</div><div class="metric-value" id="m-leader">—</div></div>
+      <div class="metric"><div class="metric-label">Top scorer</div><div class="metric-value" id="m-scorer">—</div></div>
+      <div class="metric"><div class="metric-label">Steal leader</div><div class="metric-value" id="m-steals">—</div></div>
+      <div class="metric"><div class="metric-label">Weeks remaining</div><div class="metric-value" id="m-weeks">—</div></div>
+    </div>
+
+    <div class="two-col">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+          <div class="card-title" style="margin-bottom:0;">Standings — top 6</div>
+          <span class="pill pill-teal">Playoff line: 6th</span>
+        </div>
+        <table id="standings-table">
+          <thead>
+            <tr>
+              <th style="width:20px;">#</th>
+              <th>Team</th>
+              <th style="text-align:right;">W-L</th>
+              <th style="text-align:right;">Pts</th>
+              <th style="text-align:right;">Streak</th>
+            </tr>
+          </thead>
+          <tbody id="standings-body">
+            <tr><td colspan="5" style="color:var(--text-muted);text-align:center;padding:20px;">Loading...</td></tr>
+          </tbody>
+        </table>
+        <div style="border-top:0.5px dashed var(--border);margin-top:10px;padding-top:8px;font-size:11px;color:var(--text-muted);">— playoff cutline —</div>
+        <div style="margin-top:10px;"><a href="standings.html" class="btn" style="width:100%;text-align:center;display:block;font-size:12px;text-decoration:none;">Full standings →</a></div>
+      </div>
+
+      <div>
+        <div class="card" style="margin-bottom:14px;">
+          <div class="card-title">This week's matchups</div>
+          <div id="matchups-list"><div style="font-size:13px;color:var(--text-muted);">Loading matchups...</div></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Last session results</div>
+          <div id="results-list"><div style="font-size:13px;color:var(--text-muted);">Loading results...</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Commissioner panel -->
+    <div id="commissioner-panel" style="display:none;margin-top:8px;">
+      <div class="section-label">Commissioner tools</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
+        <a href="admin-league.html" class="card" style="text-decoration:none;cursor:pointer;">
+          <div style="font-size:13px;font-weight:600;margin-bottom:4px;">Manage league</div>
+          <div style="font-size:12px;color:var(--text-muted);">Teams, season settings, niche categories</div>
+        </a>
+        <a href="admin-questions.html" class="card" style="text-decoration:none;cursor:pointer;">
+          <div style="font-size:13px;font-weight:600;margin-bottom:4px;">Question builder</div>
+          <div style="font-size:12px;color:var(--text-muted);">Build rounds, manage question bank</div>
+        </a>
+        <a href="scoreboard.html" class="card" style="text-decoration:none;cursor:pointer;">
+          <div style="font-size:13px;font-weight:600;margin-bottom:4px;">Live scoreboard</div>
+          <div style="font-size:12px;color:var(--text-muted);">Run a live game session</div>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { renderNav, } from "./js/app.js";
+    import { auth, db } from "./js/firebase-config.js";
+    import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+    import { doc, getDoc, collection, getDocs, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    renderNav("dashboard");
+
+    const COLORS = ["av-a","av-b","av-c","av-d","av-e"];
+
+    onAuthStateChanged(auth, async user => {
+      if (!user) {
+        loadPublicView();
+        return;
+      }
+      const snap = await getDoc(doc(db, "users", user.uid));
+      const profile = snap.exists() ? snap.data() : {};
+      const role = profile.role || "player";
+
+      if (role === "commissioner") {
+        document.getElementById("start-session-btn").style.display = "inline-block";
+        document.getElementById("commissioner-panel").style.display = "block";
+      }
+
+      loadDashboardData(user.uid, role);
+    });
+
+    async function loadDashboardData(uid, role) {
+      try {
+        const teamsSnap = await getDocs(query(collection(db, "teams"), orderBy("wins", "desc")));
+        const teams = [];
+        teamsSnap.forEach(d => teams.push({ id: d.id, ...d.data() }));
+
+        if (teams.length === 0) {
+          document.getElementById("standings-body").innerHTML =
+            `<tr><td colspan="5" style="color:var(--text-muted);text-align:center;padding:20px;">No teams yet. Commissioner can add teams.</td></tr>`;
+          return;
+        }
+
+        // Metrics
+        if (teams[0]) document.getElementById("m-leader").textContent = teams[0].name || "—";
+
+        // Standings
+        const ranks = ["g","s","b","","","",""];
+        const tbody = teams.slice(0,6).map((t, i) => {
+          const streak = t.streak > 0 ? `<span style="color:#3B6D11;">W${t.streak}</span>` : t.streak < 0 ? `<span style="color:#A32D2D;">L${Math.abs(t.streak)}</span>` : "—";
+          const av = COLORS[i % COLORS.length];
+          const initials = (t.name || "??").substring(0,2).toUpperCase();
+          return `<tr>
+            <td class="rank ${ranks[i]}">${i+1}</td>
+            <td><div style="display:flex;align-items:center;gap:8px;"><div class="av ${av}">${initials}</div>${t.name}</div></td>
+            <td style="text-align:right;">${t.wins||0}-${t.losses||0}</td>
+            <td style="text-align:right;font-weight:600;">${t.pointsFor||0}</td>
+            <td style="text-align:right;">${streak}</td>
+          </tr>`;
+        }).join("");
+        document.getElementById("standings-body").innerHTML = tbody || `<tr><td colspan="5" style="color:var(--text-muted);text-align:center;padding:20px;">No standings data yet.</td></tr>`;
+
+        // Matchups
+        const matchupsSnap = await getDocs(query(collection(db, "matchups"), orderBy("week", "desc"), limit(6)));
+        const matchups = [];
+        matchupsSnap.forEach(d => matchups.push({ id: d.id, ...d.data() }));
+        const currentWeek = matchups[0]?.week || 1;
+        const thisWeek = matchups.filter(m => m.week === currentWeek && !m.completed);
+        document.getElementById("matchups-list").innerHTML = thisWeek.length
+          ? thisWeek.map(m => `
+              <div class="matchup-row">
+                <span style="font-size:13px;">${m.homeTeam} <span style="color:var(--text-muted);padding:0 5px;">vs</span> ${m.awayTeam}</span>
+                <span class="pill pill-blue">${m.scheduledTime || "TBD"}</span>
+              </div>`).join("")
+          : `<div style="font-size:13px;color:var(--text-muted);">No matchups scheduled yet.</div>`;
+
+        // Last results
+        const lastWeek = matchups.filter(m => m.completed);
+        document.getElementById("results-list").innerHTML = lastWeek.slice(0,3).length
+          ? lastWeek.slice(0,3).map(m => `
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:0.5px solid var(--border);font-size:13px;">
+                <span>${m.homeTeam}</span>
+                <div style="display:flex;gap:10px;align-items:center;">
+                  <span style="font-weight:600;color:#3B6D11;">${m.homeScore}</span>
+                  <span style="font-size:11px;color:var(--text-muted);">def.</span>
+                  <span style="font-weight:600;color:#A32D2D;">${m.awayScore}</span>
+                </div>
+                <span>${m.awayTeam}</span>
+              </div>`).join("")
+          : `<div style="font-size:13px;color:var(--text-muted);">No completed games yet.</div>`;
+
+      } catch(e) {
+        console.error(e);
+      }
+    }
+
+    function loadPublicView() {
+      document.getElementById("page-title").textContent = "The Savant Trivia";
+      document.getElementById("page-subtitle").textContent = "Sign in to view your league dashboard";
+      document.getElementById("ticker").textContent = "Sign in to see live results and standings";
+      document.getElementById("standings-body").innerHTML =
+        `<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text-muted);"><a href="login.html" style="color:var(--teal);">Sign in</a> to view standings</td></tr>`;
+      document.getElementById("matchups-list").innerHTML = `<div style="font-size:13px;color:var(--text-muted);"><a href="login.html" style="color:var(--teal);">Sign in</a> to view matchups</div>`;
+      document.getElementById("results-list").innerHTML = `<div style="font-size:13px;color:var(--text-muted);"><a href="login.html" style="color:var(--teal);">Sign in</a> to view results</div>`;
+    }
+  </script>
+</body>
+</html>

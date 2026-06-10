@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Live Scoreboard — The Savant Trivia</title>
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    body { background: #0a0f1a; }
+    .sb-page { max-width: 900px; margin: 0 auto; padding: 16px 20px; }
+    .setup-card { background: #fff; border-radius: 12px; padding: 32px; max-width: 600px; margin: 40px auto; }
+  </style>
+</head>
+<body>
+  <div id="main-nav"></div>
+
+  <!-- SETUP SCREEN -->
+  <div id="setup-screen" class="sb-page">
+    <div class="setup-card">
+      <div style="font-size:18px;font-weight:700;margin-bottom:6px;">Start a game session</div>
+      <div style="font-size:13px;color:var(--text-muted);margin-bottom:24px;">Configure the matchup before going live</div>
+
+      <div class="form-group">
+        <label class="form-label">Home team</label>
+        <select class="form-select" id="setup-home"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Away team</label>
+        <select class="form-select" id="setup-away"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Emcee name</label>
+        <input type="text" class="form-input" id="setup-emcee" placeholder="Your name" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Week number</label>
+        <input type="number" class="form-input" id="setup-week" value="1" min="1" max="18" />
+      </div>
+      <div class="form-error" id="setup-error"></div>
+      <button class="btn btn-primary" style="width:100%;font-size:14px;padding:10px;" id="start-game-btn">Go live →</button>
+    </div>
+  </div>
+
+  <!-- LIVE SCOREBOARD -->
+  <div id="live-screen" style="display:none;" class="sb-page">
+    <div class="sb-wrap">
+      <div class="sb-header">
+        <div class="sb-header-title">The Savant Trivia — Live</div>
+        <div class="sb-header-meta" id="sb-meta">Week 1 · Loading...</div>
+      </div>
+
+      <div class="sb-scores">
+        <div class="sb-team" style="border-right:1px solid #1a2535;">
+          <div class="sb-team-name" id="home-name">Home</div>
+          <div class="sb-score" id="home-score">0</div>
+        </div>
+        <div class="sb-vs">·</div>
+        <div class="sb-team">
+          <div class="sb-team-name" id="away-name">Away</div>
+          <div class="sb-score" id="away-score">0</div>
+        </div>
+      </div>
+
+      <div class="sb-question-zone">
+        <div id="sb-cat-pill" class="sb-cat-pill">Select a category</div>
+        <div class="sb-question" id="sb-question">Choose a category below to begin</div>
+        <div class="sb-whose-turn" id="sb-whose-turn">—</div>
+
+        <div class="sb-timer-wrap">
+          <div class="timer-bar-bg"><div class="timer-bar-fill" id="timer-bar" style="width:100%;"></div></div>
+          <div class="sb-timer" id="sb-timer">30</div>
+          <div class="timer-bar-bg"><div class="timer-bar-fill" id="timer-bar2" style="width:100%;"></div></div>
+        </div>
+
+        <div class="sb-actions">
+          <button class="sb-btn-correct" id="btn-correct" onclick="awardPoint('home')">✓ Correct +1</button>
+          <button class="sb-btn-wrong" id="btn-wrong" onclick="markWrong()">✗ Wrong</button>
+          <button class="sb-btn-steal" id="btn-steal" onclick="awardPoint('away')">Steal +1</button>
+          <button class="sb-btn-next" onclick="nextQuestion()">Next question →</button>
+        </div>
+
+        <div class="sb-powerups" id="powerups-home">
+          <div style="font-size:10px;color:#3a4a5a;margin-right:4px;text-transform:uppercase;letter-spacing:0.05em;" id="pu-label-home">Home power-ups</div>
+          <div class="pu-chip avail" id="pu-home-double" onclick="usePowerup('home','double')">2× Double</div>
+          <div class="pu-chip avail" id="pu-home-phone" onclick="usePowerup('home','phone')">📞 Phone a friend</div>
+          <div class="pu-chip avail" id="pu-home-dip" onclick="usePowerup('home','dip')">↔ Double dip</div>
+        </div>
+        <div class="sb-powerups" id="powerups-away" style="margin-top:4px;">
+          <div style="font-size:10px;color:#3a4a5a;margin-right:4px;text-transform:uppercase;letter-spacing:0.05em;" id="pu-label-away">Away power-ups</div>
+          <div class="pu-chip avail" id="pu-away-double" onclick="usePowerup('away','double')">2× Double</div>
+          <div class="pu-chip avail" id="pu-away-phone" onclick="usePowerup('away','phone')">📞 Phone a friend</div>
+          <div class="pu-chip avail" id="pu-away-dip" onclick="usePowerup('away','dip')">↔ Double dip</div>
+        </div>
+      </div>
+
+      <!-- CATEGORY SELECTOR -->
+      <div style="background:#111827;padding:16px 20px;border-top:1px solid #1a2535;">
+        <div style="font-size:10px;color:#3a4a5a;letter-spacing:0.07em;text-transform:uppercase;margin-bottom:10px;">Select next category</div>
+        <div id="cat-grid" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+      </div>
+
+      <!-- PLAYER STATS -->
+      <div class="sb-players">
+        <div class="sb-team-players">
+          <div class="sb-team-players-label" id="home-players-label">Home team</div>
+          <div id="home-players"></div>
+        </div>
+        <div class="sb-team-players" style="border-left:1px solid #1a2535;">
+          <div class="sb-team-players-label" id="away-players-label">Away team</div>
+          <div id="away-players"></div>
+        </div>
+      </div>
+
+      <div class="sb-footer">
+        <div class="sb-footer-cats" id="remaining-cats">Categories remaining: —</div>
+        <button class="sb-end-btn" onclick="endSession()">End session</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RECAP SCREEN -->
+  <div id="recap-screen" style="display:none;" class="sb-page">
+    <div class="setup-card" style="text-align:center;">
+      <div style="font-size:22px;font-weight:700;margin-bottom:6px;">Game over</div>
+      <div style="font-size:14px;color:var(--text-muted);margin-bottom:24px;" id="recap-subtitle">—</div>
+      <div style="display:flex;justify-content:center;gap:40px;margin-bottom:24px;">
+        <div>
+          <div style="font-size:13px;color:var(--text-muted);" id="recap-home-name">Home</div>
+          <div style="font-size:48px;font-weight:700;" id="recap-home-score">0</div>
+        </div>
+        <div style="font-size:32px;color:var(--text-muted);padding-top:10px;">–</div>
+        <div>
+          <div style="font-size:13px;color:var(--text-muted);" id="recap-away-name">Away</div>
+          <div style="font-size:48px;font-weight:700;" id="recap-away-score">0</div>
+        </div>
+      </div>
+      <div id="recap-mvp" style="font-size:13px;color:var(--text-muted);margin-bottom:24px;"></div>
+      <div style="display:flex;gap:12px;justify-content:center;">
+        <a href="dashboard.html" class="btn btn-primary" style="text-decoration:none;">Back to dashboard</a>
+        <button class="btn" onclick="startNewGame()">New game</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { renderNav } from "./js/app.js";
+    import { requireCommissioner } from "./js/auth.js";
+    import { db } from "./js/firebase-config.js";
+    import { collection, getDocs, addDoc, doc, updateDoc, increment } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    requireCommissioner();
+    renderNav("scoreboard");
+
+    const CATEGORIES = ["Movies & TV","Geography","General Knowledge","Mystery","Football","Basketball","Music","History","Who's Closer","Niche"];
+    let gameState = {
+      homeTeam: null, awayTeam: null,
+      homeScore: 0, awayScore: 0,
+      homePlayers: [], awayPlayers: [],
+      usedCategories: [],
+      currentCategory: null,
+      currentTurn: "home",
+      timerInterval: null,
+      timeLeft: 30,
+      powerups: {
+        home: { double: true, phone: true, dip: true },
+        away: { double: true, phone: true, dip: true }
+      },
+      week: 1,
+      emcee: "",
+      matchupId: null
+    };
+
+    // Load teams for setup
+    async function loadTeams() {
+      const snap = await getDocs(collection(db, "teams"));
+      const teams = [];
+      snap.forEach(d => teams.push({ id: d.id, ...d.data() }));
+      const homeEl = document.getElementById("setup-home");
+      const awayEl = document.getElementById("setup-away");
+      teams.forEach(t => {
+        homeEl.innerHTML += `<option value="${t.id}" data-name="${t.name}" data-players='${JSON.stringify(t.players||[])}'>${t.name}</option>`;
+        awayEl.innerHTML += `<option value="${t.id}" data-name="${t.name}" data-players='${JSON.stringify(t.players||[])}'>${t.name}</option>`;
+      });
+      if (teams.length > 1) awayEl.selectedIndex = 1;
+    }
+    loadTeams();
+
+    document.getElementById("start-game-btn").addEventListener("click", startGame);
+
+    async function startGame() {
+      const homeOpt = document.getElementById("setup-home").selectedOptions[0];
+      const awayOpt = document.getElementById("setup-away").selectedOptions[0];
+      if (homeOpt.value === awayOpt.value) {
+        document.getElementById("setup-error").textContent = "Home and away team must be different.";
+        document.getElementById("setup-error").style.display = "block";
+        return;
+      }
+      gameState.homeTeam = { id: homeOpt.value, name: homeOpt.dataset.name, players: JSON.parse(homeOpt.dataset.players || "[]") };
+      gameState.awayTeam = { id: awayOpt.value, name: awayOpt.dataset.name, players: JSON.parse(awayOpt.dataset.players || "[]") };
+      gameState.emcee = document.getElementById("setup-emcee").value || "Emcee";
+      gameState.week = parseInt(document.getElementById("setup-week").value) || 1;
+      gameState.homePlayers = (gameState.homeTeam.players || []).map(p => ({ name: p, pts: 0, ast: 0, stl: 0 }));
+      gameState.awayPlayers = (gameState.awayTeam.players || []).map(p => ({ name: p, pts: 0, ast: 0, stl: 0 }));
+
+      document.getElementById("setup-screen").style.display = "none";
+      document.getElementById("live-screen").style.display = "block";
+
+      renderScoreboard();
+      buildCategoryGrid();
+      renderPlayers();
+    }
+
+    function renderScoreboard() {
+      document.getElementById("home-name").textContent = gameState.homeTeam.name.toUpperCase();
+      document.getElementById("away-name").textContent = gameState.awayTeam.name.toUpperCase();
+      document.getElementById("home-score").textContent = gameState.homeScore;
+      document.getElementById("away-score").textContent = gameState.awayScore;
+      document.getElementById("sb-meta").textContent = `Week ${gameState.week} · ${gameState.homeTeam.name} vs ${gameState.awayTeam.name} · Emcee: ${gameState.emcee}`;
+      document.getElementById("pu-label-home").textContent = `${gameState.homeTeam.name} power-ups`;
+      document.getElementById("pu-label-away").textContent = `${gameState.awayTeam.name} power-ups`;
+      document.getElementById("home-players-label").textContent = gameState.homeTeam.name;
+      document.getElementById("away-players-label").textContent = gameState.awayTeam.name;
+
+      const hs = gameState.homeScore, as = gameState.awayScore;
+      document.getElementById("home-score").className = "sb-score" + (hs > as ? " leading" : "");
+      document.getElementById("away-score").className = "sb-score" + (as > hs ? " leading" : "");
+    }
+
+    function buildCategoryGrid() {
+      const grid = document.getElementById("cat-grid");
+      grid.innerHTML = CATEGORIES.map(cat => {
+        const used = gameState.usedCategories.includes(cat);
+        return `<button onclick="selectCategory('${cat}')" style="background:${used?'#1a2535':'#1e3a2a'};border:0.5px solid ${used?'#2a3a4a':'#2d6b35'};color:${used?'#3a4a5a':'#5DCAA5'};font-size:11px;padding:6px 12px;border-radius:6px;cursor:${used?'not-allowed':'pointer'};${used?'text-decoration:line-through;':''}">${cat}</button>`;
+      }).join("");
+      const remaining = CATEGORIES.filter(c => !gameState.usedCategories.includes(c));
+      document.getElementById("remaining-cats").textContent = "Remaining: " + (remaining.join(" · ") || "All done!");
+    }
+
+    window.selectCategory = function(cat) {
+      if (gameState.usedCategories.includes(cat)) return;
+      gameState.currentCategory = cat;
+      document.getElementById("sb-cat-pill").textContent = cat.toUpperCase();
+      const turnTeam = gameState.currentTurn === "home" ? gameState.homeTeam.name : gameState.awayTeam.name;
+      const otherTeam = gameState.currentTurn === "home" ? gameState.awayTeam.name : gameState.homeTeam.name;
+      document.getElementById("sb-question").textContent = `[${cat}] — Enter question here`;
+      document.getElementById("sb-whose-turn").textContent = `${turnTeam} answering · steal available to ${otherTeam} if wrong`;
+      startTimer();
+    };
+
+    function startTimer() {
+      clearInterval(gameState.timerInterval);
+      gameState.timeLeft = 30;
+      updateTimer();
+      gameState.timerInterval = setInterval(() => {
+        gameState.timeLeft--;
+        updateTimer();
+        if (gameState.timeLeft <= 0) {
+          clearInterval(gameState.timerInterval);
+          document.getElementById("sb-timer").style.color = "#e07070";
+        }
+      }, 1000);
+    }
+
+    function updateTimer() {
+      document.getElementById("sb-timer").textContent = gameState.timeLeft;
+      const pct = (gameState.timeLeft / 30) * 100;
+      document.getElementById("timer-bar").style.width = pct + "%";
+      document.getElementById("timer-bar2").style.width = pct + "%";
+      const color = gameState.timeLeft > 10 ? "#5DCAA5" : gameState.timeLeft > 5 ? "#EF9F27" : "#e07070";
+      document.getElementById("timer-bar").style.background = color;
+      document.getElementById("timer-bar2").style.background = color;
+      document.getElementById("sb-timer").style.color = color;
+    }
+
+    window.awardPoint = function(side) {
+      clearInterval(gameState.timerInterval);
+      if (!gameState.currentCategory) return;
+      if (side === "home") { gameState.homeScore++; }
+      else { gameState.awayScore++; }
+      gameState.usedCategories.push(gameState.currentCategory);
+      gameState.currentCategory = null;
+      gameState.currentTurn = gameState.currentTurn === "home" ? "away" : "home";
+      renderScoreboard();
+      buildCategoryGrid();
+      document.getElementById("sb-whose-turn").textContent = "Point awarded — select next category";
+      document.getElementById("sb-question").textContent = "Select a category to continue";
+      document.getElementById("sb-cat-pill").textContent = "Select a category";
+    };
+
+    window.markWrong = function() {
+      clearInterval(gameState.timerInterval);
+      document.getElementById("sb-whose-turn").textContent = "Wrong — steal opportunity for " +
+        (gameState.currentTurn === "home" ? gameState.awayTeam.name : gameState.homeTeam.name);
+      gameState.timeLeft = 15;
+      startTimer();
+    };
+
+    window.nextQuestion = function() {
+      clearInterval(gameState.timerInterval);
+      if (gameState.currentCategory) gameState.usedCategories.push(gameState.currentCategory);
+      gameState.currentCategory = null;
+      gameState.currentTurn = gameState.currentTurn === "home" ? "away" : "home";
+      buildCategoryGrid();
+      document.getElementById("sb-question").textContent = "Select a category to continue";
+      document.getElementById("sb-cat-pill").textContent = "Select a category";
+      document.getElementById("sb-whose-turn").textContent = "—";
+      document.getElementById("sb-timer").textContent = "30";
+      document.getElementById("timer-bar").style.width = "100%";
+      document.getElementById("timer-bar2").style.width = "100%";
+    };
+
+    window.usePowerup = function(side, type) {
+      if (!gameState.powerups[side][type]) return;
+      gameState.powerups[side][type] = false;
+      const el = document.getElementById(`pu-${side}-${type}`);
+      if (el) { el.classList.remove("avail"); el.classList.add("used"); }
+    };
+
+    function renderPlayers() {
+      const renderList = (players, containerId) => {
+        document.getElementById(containerId).innerHTML = players.length
+          ? players.map((p,i) => `
+            <div class="player-row">
+              <span class="player-name">${p.name}</span>
+              <div class="player-stats">
+                <span class="pstat">⭐ <span id="${containerId}-pts-${i}">${p.pts}</span></span>
+                <span class="pstat">❤️ <span id="${containerId}-ast-${i}">${p.ast}</span></span>
+                <span class="pstat">⚡ <span id="${containerId}-stl-${i}">${p.stl}</span></span>
+                <button onclick="addStat('${containerId}',${i},'pts')" style="background:#1a2535;border:0.5px solid #2a3a4a;color:#5DCAA5;font-size:10px;padding:2px 6px;border-radius:4px;cursor:pointer;">+</button>
+              </div>
+            </div>`).join("")
+          : `<div style="font-size:12px;color:#3a4a5a;">No players registered</div>`;
+      };
+      renderList(gameState.homePlayers, "home-players");
+      renderList(gameState.awayPlayers, "away-players");
+    }
+
+    window.addStat = function(side, idx, stat) {
+      const arr = side === "home-players" ? gameState.homePlayers : gameState.awayPlayers;
+      arr[idx][stat]++;
+      const el = document.getElementById(`${side}-${stat}-${idx}`);
+      if (el) el.textContent = arr[idx][stat];
+    };
+
+    window.endSession = async function() {
+      clearInterval(gameState.timerInterval);
+      try {
+        await addDoc(collection(db, "matchups"), {
+          homeTeam: gameState.homeTeam.name,
+          awayTeam: gameState.awayTeam.name,
+          homeScore: gameState.homeScore,
+          awayScore: gameState.awayScore,
+          week: gameState.week,
+          emcee: gameState.emcee,
+          completed: true,
+          completedAt: new Date().toISOString()
+        });
+        const winner = gameState.homeScore > gameState.awayScore ? "home" : "away";
+        const loser = winner === "home" ? "away" : "home";
+        const winTeam = gameState[`${winner}Team`];
+        const loseTeam = gameState[`${loser}Team`];
+        if (winTeam.id) {
+          await updateDoc(doc(db, "teams", winTeam.id), { wins: increment(1), pointsFor: increment(gameState[`${winner}Score`]), pointsAgainst: increment(gameState[`${loser}Score`]), streak: increment(1) });
+        }
+        if (loseTeam.id) {
+          await updateDoc(doc(db, "teams", loseTeam.id), { losses: increment(1), pointsFor: increment(gameState[`${loser}Score`]), pointsAgainst: increment(gameState[`${winner}Score`]), streak: -1 });
+        }
+      } catch(e) { console.error(e); }
+
+      document.getElementById("live-screen").style.display = "none";
+      document.getElementById("recap-screen").style.display = "block";
+      document.getElementById("recap-home-name").textContent = gameState.homeTeam.name;
+      document.getElementById("recap-away-name").textContent = gameState.awayTeam.name;
+      document.getElementById("recap-home-score").textContent = gameState.homeScore;
+      document.getElementById("recap-away-score").textContent = gameState.awayScore;
+      const w = gameState.homeScore > gameState.awayScore ? gameState.homeTeam.name : gameState.homeScore < gameState.awayScore ? gameState.awayTeam.name : null;
+      document.getElementById("recap-subtitle").textContent = w ? `${w} wins!` : "It's a tie!";
+    };
+
+    window.startNewGame = function() {
+      document.getElementById("recap-screen").style.display = "none";
+      document.getElementById("setup-screen").style.display = "block";
+      gameState = { homeTeam:null,awayTeam:null,homeScore:0,awayScore:0,homePlayers:[],awayPlayers:[],usedCategories:[],currentCategory:null,currentTurn:"home",timerInterval:null,timeLeft:30,powerups:{home:{double:true,phone:true,dip:true},away:{double:true,phone:true,dip:true}},week:1,emcee:"",matchupId:null };
+    };
+  </script>
+</body>
+</html>

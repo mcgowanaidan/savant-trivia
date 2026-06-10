@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Standings — The Savant Trivia</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="main-nav"></div>
+  <div class="ticker">STANDINGS — Season 2 &nbsp;·&nbsp; Top 6 advance to single-elimination playoffs &nbsp;·&nbsp; Tiebreaker: points for</div>
+
+  <div class="page-wrap">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Season standings</div>
+        <div class="page-subtitle" id="standings-subtitle">Loading...</div>
+      </div>
+      <select class="form-select" style="width:auto;font-size:13px;" id="filter-select">
+        <option value="season">Full season</option>
+        <option value="last4">Last 4 weeks</option>
+      </select>
+    </div>
+
+    <div class="card" style="margin-bottom:16px;">
+      <table style="table-layout:fixed;">
+        <thead>
+          <tr>
+            <th style="width:24px;">#</th>
+            <th>Team</th>
+            <th style="text-align:right;">W</th>
+            <th style="text-align:right;">L</th>
+            <th style="text-align:right;">Pts for</th>
+            <th style="text-align:right;">Pts agst</th>
+            <th style="text-align:right;">Avg</th>
+            <th style="text-align:right;">Streak</th>
+            <th style="text-align:right;">Status</th>
+          </tr>
+        </thead>
+        <tbody id="standings-body">
+          <tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text-muted);">Loading standings...</td></tr>
+        </tbody>
+      </table>
+      <div style="margin-top:12px;font-size:11px;color:var(--text-muted);">Tiebreaker: points for &nbsp;·&nbsp; Top 6 advance to single-elimination playoffs</div>
+    </div>
+
+    <div class="two-col">
+      <div class="card">
+        <div class="card-title">Playoff picture</div>
+        <div id="playoff-picture" style="font-size:13px;color:var(--text-muted);">Loading...</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Recent results</div>
+        <div id="recent-results" style="font-size:13px;color:var(--text-muted);">Loading...</div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { renderNav } from "./js/app.js";
+    import { db } from "./js/firebase-config.js";
+    import { collection, getDocs, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    renderNav("standings");
+
+    const COLORS = ["av-a","av-b","av-c","av-d","av-e"];
+    const RANKS = ["g","s","b","","","","","","","","",""];
+    const PLAYOFF_LINE = 6;
+
+    async function loadStandings() {
+      try {
+        const snap = await getDocs(query(collection(db, "teams"), orderBy("wins","desc")));
+        const teams = [];
+        snap.forEach(d => teams.push({ id: d.id, ...d.data() }));
+
+        document.getElementById("standings-subtitle").textContent =
+          `${teams.length} teams · Season 2`;
+
+        if (!teams.length) {
+          document.getElementById("standings-body").innerHTML =
+            `<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text-muted);">No teams registered yet.</td></tr>`;
+          return;
+        }
+
+        const rows = teams.map((t, i) => {
+          const av = COLORS[i % COLORS.length];
+          const initials = (t.name||"??").substring(0,2).toUpperCase();
+          const streak = t.streak > 0
+            ? `<span style="font-size:12px;color:#3B6D11;">W${t.streak}</span>`
+            : t.streak < 0
+            ? `<span style="font-size:12px;color:#A32D2D;">L${Math.abs(t.streak)}</span>`
+            : "<span style='color:var(--text-muted);font-size:12px;'>—</span>";
+          const gp = (t.wins||0) + (t.losses||0);
+          const avg = gp > 0 ? ((t.pointsFor||0)/gp).toFixed(1) : "—";
+          let status, statusClass;
+          if (i < PLAYOFF_LINE) {
+            status = i < PLAYOFF_LINE - 1 ? "In" : "Edge";
+            statusClass = i < PLAYOFF_LINE - 1 ? "pill-green" : "pill-gold";
+          } else {
+            status = "Out"; statusClass = "pill-red";
+          }
+
+          let cutline = "";
+          if (i === PLAYOFF_LINE - 1) cutline = `</tbody><tr><td colspan="9" style="padding:4px 0;"><span style="font-size:10px;color:var(--text-muted);">— — playoff cutline — —</span></td></tr><tbody>`;
+
+          return `<tr style="${i >= PLAYOFF_LINE ? 'opacity:0.6;' : ''}">
+            <td class="rank ${RANKS[i]}">${i+1}</td>
+            <td><div style="display:flex;align-items:center;gap:8px;"><div class="av ${av}">${initials}</div>${t.name}</div></td>
+            <td style="text-align:right;">${t.wins||0}</td>
+            <td style="text-align:right;">${t.losses||0}</td>
+            <td style="text-align:right;font-weight:600;">${t.pointsFor||0}</td>
+            <td style="text-align:right;">${t.pointsAgainst||0}</td>
+            <td style="text-align:right;">${avg}</td>
+            <td style="text-align:right;">${streak}</td>
+            <td style="text-align:right;"><span class="pill ${statusClass}">${status}</span></td>
+          </tr>${cutline}`;
+        }).join("");
+
+        document.getElementById("standings-body").innerHTML = rows;
+
+        // Playoff picture
+        const inTeams = teams.slice(0, PLAYOFF_LINE);
+        const outTeams = teams.slice(PLAYOFF_LINE);
+        document.getElementById("playoff-picture").innerHTML = `
+          <div style="margin-bottom:10px;font-weight:600;font-size:12px;color:var(--teal);">In (${inTeams.length})</div>
+          ${inTeams.map(t => `<div style="padding:4px 0;border-bottom:0.5px solid var(--border);">${t.name} <span style="color:var(--text-muted);font-size:11px;">${t.wins||0}-${t.losses||0}</span></div>`).join("")}
+          ${outTeams.length ? `<div style="margin-top:10px;margin-bottom:6px;font-weight:600;font-size:12px;color:var(--text-muted);">Eliminated (${outTeams.length})</div>
+          ${outTeams.map(t => `<div style="padding:4px 0;border-bottom:0.5px solid var(--border);opacity:0.6;">${t.name} <span style="color:var(--text-muted);font-size:11px;">${t.wins||0}-${t.losses||0}</span></div>`).join("")}` : ""}`;
+
+        // Recent results
+        const matchSnap = await getDocs(query(collection(db, "matchups"), orderBy("completedAt","desc"), limit(6)));
+        const results = [];
+        matchSnap.forEach(d => results.push(d.data()));
+        document.getElementById("recent-results").innerHTML = results.length
+          ? results.map(m => `
+            <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:0.5px solid var(--border);font-size:13px;">
+              <span>${m.homeTeam}</span>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <span style="font-weight:600;color:#3B6D11;">${m.homeScore}</span>
+                <span style="font-size:11px;color:var(--text-muted);">–</span>
+                <span style="font-weight:600;color:#A32D2D;">${m.awayScore}</span>
+              </div>
+              <span>${m.awayTeam}</span>
+            </div>`).join("")
+          : "No completed games yet.";
+
+      } catch(e) {
+        console.error(e);
+        document.getElementById("standings-body").innerHTML =
+          `<tr><td colspan="9" style="text-align:center;padding:24px;color:#dc2626;">Error loading standings.</td></tr>`;
+      }
+    }
+
+    loadStandings();
+  </script>
+</body>
+</html>

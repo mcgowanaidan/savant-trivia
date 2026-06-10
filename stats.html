@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stats — The Savant Trivia</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="main-nav"></div>
+  <div class="ticker">PLAYER STATS &nbsp;·&nbsp; Points · Assists · Steals &nbsp;·&nbsp; Category win rates</div>
+
+  <div class="page-wrap">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Player stats</div>
+        <div class="page-subtitle">Season 2 · All games</div>
+      </div>
+    </div>
+
+    <div class="metric-grid" style="margin-bottom:20px;">
+      <div class="metric"><div class="metric-label">Points leader</div><div class="metric-value" id="stat-pts-leader">—</div></div>
+      <div class="metric"><div class="metric-label">Assist leader</div><div class="metric-value" id="stat-ast-leader">—</div></div>
+      <div class="metric"><div class="metric-label">Steal leader</div><div class="metric-value" id="stat-stl-leader">—</div></div>
+      <div class="metric"><div class="metric-label">Total games played</div><div class="metric-value" id="stat-games">—</div></div>
+    </div>
+
+    <div class="two-col" style="margin-bottom:16px;">
+      <div class="card">
+        <div class="card-title">Points leaders</div>
+        <table>
+          <thead>
+            <tr>
+              <th style="width:24px;">#</th>
+              <th>Player</th>
+              <th>Team</th>
+              <th style="text-align:right;">Pts</th>
+              <th style="text-align:right;">Ast</th>
+              <th style="text-align:right;">Stl</th>
+            </tr>
+          </thead>
+          <tbody id="pts-leaders">
+            <tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-muted);">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <div class="card-title">Steal leaders</div>
+        <table>
+          <thead>
+            <tr>
+              <th style="width:24px;">#</th>
+              <th>Player</th>
+              <th>Team</th>
+              <th style="text-align:right;">Stl</th>
+              <th style="text-align:right;">Pts</th>
+            </tr>
+          </thead>
+          <tbody id="stl-leaders">
+            <tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text-muted);">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Category win rates by team</div>
+      <div style="overflow-x:auto;">
+        <table id="cat-table">
+          <thead>
+            <tr id="cat-header">
+              <th>Category</th>
+            </tr>
+          </thead>
+          <tbody id="cat-body">
+            <tr><td colspan="10" style="text-align:center;padding:20px;color:var(--text-muted);">Loading category stats...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { renderNav } from "./js/app.js";
+    import { db } from "./js/firebase-config.js";
+    import { collection, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    renderNav("stats");
+
+    const RANKS = ["g","s","b","","","","","","","","",""];
+    const CATEGORIES = ["Movies & TV","Geography","General Knowledge","Mystery","Football","Basketball","Music","History","Who's Closer","Niche"];
+
+    async function loadStats() {
+      try {
+        const snap = await getDocs(query(collection(db, "players"), orderBy("points","desc")));
+        const players = [];
+        snap.forEach(d => players.push({ id: d.id, ...d.data() }));
+
+        if (!players.length) {
+          document.getElementById("pts-leaders").innerHTML =
+            `<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-muted);">No player stats yet. Stats populate after games are played.</td></tr>`;
+          document.getElementById("stl-leaders").innerHTML =
+            `<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text-muted);">No steal stats yet.</td></tr>`;
+          return;
+        }
+
+        if (players[0]) document.getElementById("stat-pts-leader").textContent = `${players[0].name} · ${players[0].points||0} pts`;
+        const stlSorted = [...players].sort((a,b)=>(b.steals||0)-(a.steals||0));
+        if (stlSorted[0]) document.getElementById("stat-stl-leader").textContent = `${stlSorted[0].name} · ${stlSorted[0].steals||0}`;
+        const astSorted = [...players].sort((a,b)=>(b.assists||0)-(a.assists||0));
+        if (astSorted[0]) document.getElementById("stat-ast-leader").textContent = `${astSorted[0].name} · ${astSorted[0].assists||0}`;
+
+        document.getElementById("pts-leaders").innerHTML = players.slice(0,10).map((p,i) => `
+          <tr>
+            <td class="rank ${RANKS[i]}">${i+1}</td>
+            <td>${p.name}</td>
+            <td style="color:var(--text-muted);font-size:11px;">${p.teamName||"—"}</td>
+            <td style="text-align:right;font-weight:600;">${p.points||0}</td>
+            <td style="text-align:right;">${p.assists||0}</td>
+            <td style="text-align:right;">${p.steals||0}</td>
+          </tr>`).join("");
+
+        document.getElementById("stl-leaders").innerHTML = stlSorted.slice(0,10).map((p,i) => `
+          <tr>
+            <td class="rank ${RANKS[i]}">${i+1}</td>
+            <td>${p.name}</td>
+            <td style="color:var(--text-muted);font-size:11px;">${p.teamName||"—"}</td>
+            <td style="text-align:right;font-weight:600;">${p.steals||0}</td>
+            <td style="text-align:right;">${p.points||0}</td>
+          </tr>`).join("");
+
+        // Category stats from teams
+        const teamsSnap = await getDocs(collection(db, "teams"));
+        const teams = [];
+        teamsSnap.forEach(d => teams.push({ id: d.id, ...d.data() }));
+
+        if (teams.length) {
+          const headerRow = document.getElementById("cat-header");
+          teams.slice(0,5).forEach(t => {
+            const th = document.createElement("th");
+            th.textContent = (t.name||"").substring(0,8);
+            th.style.textAlign = "right";
+            headerRow.appendChild(th);
+          });
+
+          document.getElementById("cat-body").innerHTML = CATEGORIES.map(cat => {
+            const cells = teams.slice(0,5).map(t => {
+              const rate = t.categoryStats?.[cat] ?? null;
+              const display = rate !== null ? `${Math.round(rate)}%` : "—";
+              const color = rate !== null && rate >= 70 ? "color:#3B6D11;font-weight:600;" : "";
+              return `<td style="text-align:right;${color}">${display}</td>`;
+            }).join("");
+            return `<tr><td>${cat}</td>${cells}</tr>`;
+          }).join("");
+        }
+
+      } catch(e) {
+        console.error(e);
+      }
+    }
+
+    loadStats();
+  </script>
+</body>
+</html>
