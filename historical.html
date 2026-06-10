@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Historical — The Savant Trivia</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="main-nav"></div>
+  <div class="ticker">HISTORICAL &nbsp;·&nbsp; Past seasons, final standings, and player records</div>
+
+  <div class="page-wrap">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Historical records</div>
+        <div class="page-subtitle">Past season results, standings, and all-time player stats</div>
+      </div>
+      <select class="form-select" id="season-select" style="width:auto;">
+        <option value="all">All seasons</option>
+      </select>
+    </div>
+
+    <!-- ALL TIME STATS -->
+    <div class="metric-grid" style="margin-bottom:24px;">
+      <div class="metric"><div class="metric-label">All-time wins leader</div><div class="metric-value" id="ht-wins">—</div></div>
+      <div class="metric"><div class="metric-label">All-time points leader</div><div class="metric-value" id="ht-pts">—</div></div>
+      <div class="metric"><div class="metric-label">All-time steal leader</div><div class="metric-value" id="ht-stl">—</div></div>
+      <div class="metric"><div class="metric-label">Total games played</div><div class="metric-value" id="ht-games">—</div></div>
+    </div>
+
+    <div class="two-col" style="margin-bottom:20px;">
+      <!-- SEASON CHAMPIONS -->
+      <div class="card">
+        <div class="card-title">Season champions</div>
+        <div id="champions-list">
+          <div style="font-size:13px;color:var(--text-muted);">Loading...</div>
+        </div>
+      </div>
+
+      <!-- ALL TIME PLAYER STATS -->
+      <div class="card">
+        <div class="card-title">All-time player leaders</div>
+        <table>
+          <thead>
+            <tr>
+              <th>#</th><th>Player</th><th>Team</th>
+              <th style="text-align:right;">Pts</th>
+              <th style="text-align:right;">Ast</th>
+              <th style="text-align:right;">Stl</th>
+            </tr>
+          </thead>
+          <tbody id="alltime-players">
+            <tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-muted);">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- SEASON STANDINGS -->
+    <div class="section-label">Final season standings</div>
+    <div class="card" style="margin-bottom:20px;">
+      <table style="table-layout:fixed;">
+        <thead>
+          <tr>
+            <th style="width:24px;">#</th>
+            <th>Team</th>
+            <th style="text-align:right;">Season</th>
+            <th style="text-align:right;">W</th>
+            <th style="text-align:right;">L</th>
+            <th style="text-align:right;">Pts for</th>
+            <th style="text-align:right;">Avg</th>
+            <th style="text-align:right;">Result</th>
+          </tr>
+        </thead>
+        <tbody id="historical-standings">
+          <tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text-muted);">Loading historical standings...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- GAME RESULTS -->
+    <div class="section-label">All game results</div>
+    <div class="card">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:60px;">Week</th>
+            <th>Home</th>
+            <th style="text-align:center;">Score</th>
+            <th>Away</th>
+            <th style="text-align:right;">Season</th>
+          </tr>
+        </thead>
+        <tbody id="game-results">
+          <tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-muted);">Loading game results...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script type="module">
+    import { renderNav } from "./js/app.js";
+    import { db } from "./js/firebase-config.js";
+    import { collection, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    renderNav("historical");
+
+    const COLORS = ["av-a","av-b","av-c","av-d","av-e"];
+    const RANKS = ["g","s","b","","","","","","","","",""];
+
+    async function loadHistorical() {
+      try {
+        // Load all completed matchups
+        const matchSnap = await getDocs(query(collection(db, "matchups"), orderBy("week", "desc")));
+        const matchups = [];
+        matchSnap.forEach(d => matchups.push({ id: d.id, ...d.data() }));
+        const completed = matchups.filter(m => m.completed);
+
+        document.getElementById("ht-games").textContent = completed.length;
+
+        // Game results table
+        document.getElementById("game-results").innerHTML = completed.length
+          ? completed.map(m => {
+              const homeWon = m.homeScore > m.awayScore;
+              return `<tr>
+                <td style="font-size:12px;color:var(--text-muted);">Wk ${m.week}</td>
+                <td style="font-size:13px;font-weight:${homeWon?'600':'400'};color:${homeWon?'var(--text)':'var(--text-muted)'};">${m.homeTeam}</td>
+                <td style="text-align:center;font-size:13px;">
+                  <span style="font-weight:600;color:${homeWon?'#3B6D11':'#A32D2D'};">${m.homeScore}</span>
+                  <span style="color:var(--text-muted);padding:0 4px;">–</span>
+                  <span style="font-weight:600;color:${!homeWon?'#3B6D11':'#A32D2D'};">${m.awayScore}</span>
+                </td>
+                <td style="font-size:13px;font-weight:${!homeWon?'600':'400'};color:${!homeWon?'var(--text)':'var(--text-muted)'};">${m.awayTeam}</td>
+                <td style="text-align:right;font-size:11px;color:var(--text-muted);">S${m.season||1}</td>
+              </tr>`;
+            }).join("")
+          : `<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-muted);">No completed games yet.</td></tr>`;
+
+        // Load teams for standings
+        const teamsSnap = await getDocs(query(collection(db, "teams"), orderBy("wins","desc")));
+        const teams = [];
+        teamsSnap.forEach(d => teams.push({ id: d.id, ...d.data() }));
+
+        if (teams.length) {
+          document.getElementById("ht-wins").textContent = teams[0]?.name || "—";
+
+          document.getElementById("historical-standings").innerHTML = teams.map((t, i) => {
+            const gp = (t.wins||0) + (t.losses||0);
+            const avg = gp > 0 ? ((t.pointsFor||0)/gp).toFixed(1) : "—";
+            const av = COLORS[i % COLORS.length];
+            const initials = (t.name||"??").substring(0,2).toUpperCase();
+            const result = i === 0 ? `<span class="pill pill-gold">Champion</span>` :
+                           i < 6 ? `<span class="pill pill-green">Playoffs</span>` :
+                           `<span class="pill pill-gray">Reg. season</span>`;
+            return `<tr>
+              <td class="rank ${RANKS[i]}">${i+1}</td>
+              <td><div style="display:flex;align-items:center;gap:8px;"><div class="av ${av}">${initials}</div>${t.name}</div></td>
+              <td style="text-align:right;font-size:12px;color:var(--text-muted);">S1</td>
+              <td style="text-align:right;">${t.wins||0}</td>
+              <td style="text-align:right;">${t.losses||0}</td>
+              <td style="text-align:right;font-weight:600;">${t.pointsFor||0}</td>
+              <td style="text-align:right;">${avg}</td>
+              <td style="text-align:right;">${result}</td>
+            </tr>`;
+          }).join("");
+
+          // Champions list (placeholder for now, will populate as seasons complete)
+          document.getElementById("champions-list").innerHTML = teams[0]
+            ? `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:0.5px solid var(--border);">
+                <div style="width:32px;height:32px;border-radius:50%;background:#FAEEDA;color:#633806;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;">${(teams[0].name||"?").substring(0,2).toUpperCase()}</div>
+                <div>
+                  <div style="font-size:13px;font-weight:600;">${teams[0].name}</div>
+                  <div style="font-size:11px;color:var(--text-muted);">Season 1 · ${teams[0].wins||0}-${teams[0].losses||0}</div>
+                </div>
+                <span class="pill pill-gold" style="margin-left:auto;">Champion</span>
+              </div>
+              <div style="font-size:12px;color:var(--text-muted);margin-top:10px;">Future seasons will appear here as they complete.</div>`
+            : `<div style="font-size:13px;color:var(--text-muted);">No completed seasons yet.</div>`;
+        }
+
+        // Load player stats
+        const playersSnap = await getDocs(query(collection(db, "players"), orderBy("points","desc")));
+        const players = [];
+        playersSnap.forEach(d => players.push({ id: d.id, ...d.data() }));
+
+        if (players.length) {
+          if (players[0]) document.getElementById("ht-pts").textContent = `${players[0].name} · ${players[0].points||0}`;
+          const stlSorted = [...players].sort((a,b)=>(b.steals||0)-(a.steals||0));
+          if (stlSorted[0]) document.getElementById("ht-stl").textContent = `${stlSorted[0].name} · ${stlSorted[0].steals||0}`;
+
+          document.getElementById("alltime-players").innerHTML = players.slice(0,8).map((p,i) => `
+            <tr>
+              <td class="rank ${RANKS[i]}">${i+1}</td>
+              <td>${p.name}</td>
+              <td style="font-size:11px;color:var(--text-muted);">${p.teamName||"—"}</td>
+              <td style="text-align:right;font-weight:600;">${p.points||0}</td>
+              <td style="text-align:right;">${p.assists||0}</td>
+              <td style="text-align:right;">${p.steals||0}</td>
+            </tr>`).join("");
+        } else {
+          document.getElementById("alltime-players").innerHTML =
+            `<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-muted);">Player stats will appear after games are played.</td></tr>`;
+        }
+
+      } catch(e) {
+        console.error(e);
+      }
+    }
+
+    loadHistorical();
+  </script>
+</body>
+</html>

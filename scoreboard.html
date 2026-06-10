@@ -9,6 +9,9 @@
     body { background: #0a0f1a; }
     .sb-page { max-width: 900px; margin: 0 auto; padding: 16px 20px; }
     .setup-card { background: #fff; border-radius: 12px; padding: 32px; max-width: 600px; margin: 40px auto; }
+    .coin { width:80px;height:80px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 16px;cursor:pointer;border:3px solid var(--teal);background:#151d2e;color:#fff;transition:transform 0.1s; }
+    .coin:active{transform:scale(0.95);}
+    .coin-result{font-size:18px;font-weight:700;text-align:center;margin-bottom:16px;min-height:28px;}
   </style>
 </head>
 <body>
@@ -18,7 +21,7 @@
   <div id="setup-screen" class="sb-page">
     <div class="setup-card">
       <div style="font-size:18px;font-weight:700;margin-bottom:6px;">Start a game session</div>
-      <div style="font-size:13px;color:var(--text-muted);margin-bottom:24px;">Configure the matchup before going live</div>
+      <div style="font-size:13px;color:var(--text-muted);margin-bottom:24px;">Set up the matchup, flip for first turn, then go live.</div>
 
       <div class="form-group">
         <label class="form-label">Home team</label>
@@ -36,6 +39,23 @@
         <label class="form-label">Week number</label>
         <input type="number" class="form-input" id="setup-week" value="1" min="1" max="18" />
       </div>
+
+      <div style="border-top:1px solid var(--border);margin:20px 0;padding-top:20px;">
+        <div style="font-size:13px;font-weight:600;margin-bottom:4px;">Coin flip — who goes first?</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px;">Click the coin to flip. Winner picks their first category.</div>
+        <div class="coin" id="coin-btn" onclick="flipCoin()">🪙</div>
+        <div class="coin-result" id="coin-result"></div>
+        <div style="display:flex;gap:10px;">
+          <button class="btn" id="pick-home" style="flex:1;display:none;" onclick="setFirstTeam('home')">
+            <span id="pick-home-label">Home goes first</span>
+          </button>
+          <button class="btn" id="pick-away" style="flex:1;display:none;" onclick="setFirstTeam('away')">
+            <span id="pick-away-label">Away goes first</span>
+          </button>
+        </div>
+        <div id="first-team-set" style="display:none;font-size:13px;color:#3B6D11;text-align:center;font-weight:500;margin-top:8px;"></div>
+      </div>
+
       <div class="form-error" id="setup-error"></div>
       <button class="btn btn-primary" style="width:100%;font-size:14px;padding:10px;" id="start-game-btn">Go live →</button>
     </div>
@@ -64,6 +84,7 @@
       <div class="sb-question-zone">
         <div id="sb-cat-pill" class="sb-cat-pill">Select a category</div>
         <div class="sb-question" id="sb-question">Choose a category below to begin</div>
+        <div style="font-size:12px;color:#3a5a3a;font-weight:500;margin-bottom:6px;" id="sb-answer"></div>
         <div class="sb-whose-turn" id="sb-whose-turn">—</div>
 
         <div class="sb-timer-wrap">
@@ -73,40 +94,34 @@
         </div>
 
         <div class="sb-actions">
-          <button class="sb-btn-correct" id="btn-correct" onclick="awardPoint('home')">✓ Correct +1</button>
-          <button class="sb-btn-wrong" id="btn-wrong" onclick="markWrong()">✗ Wrong</button>
-          <button class="sb-btn-steal" id="btn-steal" onclick="awardPoint('away')">Steal +1</button>
-          <button class="sb-btn-next" onclick="nextQuestion()">Next question →</button>
+          <button class="sb-btn-correct" onclick="awardPoint('current')">✓ Correct +1</button>
+          <button class="sb-btn-wrong" onclick="markWrong()">✗ Wrong</button>
+          <button class="sb-btn-steal" onclick="awardPoint('other')">Steal +1</button>
+          <button class="sb-btn-next" onclick="nextQuestion()">Skip →</button>
         </div>
 
-        <div class="sb-powerups" id="powerups-home">
-          <div style="font-size:10px;color:#3a4a5a;margin-right:4px;text-transform:uppercase;letter-spacing:0.05em;" id="pu-label-home">Home power-ups</div>
-          <div class="pu-chip avail" id="pu-home-double" onclick="usePowerup('home','double')">2× Double</div>
-          <div class="pu-chip avail" id="pu-home-phone" onclick="usePowerup('home','phone')">📞 Phone a friend</div>
-          <div class="pu-chip avail" id="pu-home-dip" onclick="usePowerup('home','dip')">↔ Double dip</div>
-        </div>
-        <div class="sb-powerups" id="powerups-away" style="margin-top:4px;">
-          <div style="font-size:10px;color:#3a4a5a;margin-right:4px;text-transform:uppercase;letter-spacing:0.05em;" id="pu-label-away">Away power-ups</div>
-          <div class="pu-chip avail" id="pu-away-double" onclick="usePowerup('away','double')">2× Double</div>
-          <div class="pu-chip avail" id="pu-away-phone" onclick="usePowerup('away','phone')">📞 Phone a friend</div>
-          <div class="pu-chip avail" id="pu-away-dip" onclick="usePowerup('away','dip')">↔ Double dip</div>
+        <div class="sb-powerups">
+          <div style="font-size:10px;color:#3a4a5a;text-transform:uppercase;letter-spacing:0.05em;width:100%;text-align:center;margin-bottom:6px;" id="pu-turn-label">Power-ups</div>
+          <div class="pu-chip avail" id="pu-double" onclick="usePowerup('double')">2× Double</div>
+          <div class="pu-chip avail" id="pu-phone" onclick="usePowerup('phone')">📞 Phone a friend</div>
+          <div class="pu-chip avail" id="pu-dip" onclick="usePowerup('dip')">↔ Double dip</div>
         </div>
       </div>
 
       <!-- CATEGORY SELECTOR -->
       <div style="background:#111827;padding:16px 20px;border-top:1px solid #1a2535;">
-        <div style="font-size:10px;color:#3a4a5a;letter-spacing:0.07em;text-transform:uppercase;margin-bottom:10px;">Select next category</div>
+        <div style="font-size:10px;color:#3a4a5a;letter-spacing:0.07em;text-transform:uppercase;margin-bottom:10px;">Select category — <span id="turn-indicator" style="color:var(--teal);">—</span>'s turn to pick</div>
         <div id="cat-grid" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
       </div>
 
       <!-- PLAYER STATS -->
       <div class="sb-players">
         <div class="sb-team-players">
-          <div class="sb-team-players-label" id="home-players-label">Home team</div>
+          <div class="sb-team-players-label" id="home-players-label">Home</div>
           <div id="home-players"></div>
         </div>
         <div class="sb-team-players" style="border-left:1px solid #1a2535;">
-          <div class="sb-team-players-label" id="away-players-label">Away team</div>
+          <div class="sb-team-players-label" id="away-players-label">Away</div>
           <div id="away-players"></div>
         </div>
       </div>
@@ -124,17 +139,10 @@
       <div style="font-size:22px;font-weight:700;margin-bottom:6px;">Game over</div>
       <div style="font-size:14px;color:var(--text-muted);margin-bottom:24px;" id="recap-subtitle">—</div>
       <div style="display:flex;justify-content:center;gap:40px;margin-bottom:24px;">
-        <div>
-          <div style="font-size:13px;color:var(--text-muted);" id="recap-home-name">Home</div>
-          <div style="font-size:48px;font-weight:700;" id="recap-home-score">0</div>
-        </div>
+        <div><div style="font-size:13px;color:var(--text-muted);" id="recap-home-name">Home</div><div style="font-size:48px;font-weight:700;" id="recap-home-score">0</div></div>
         <div style="font-size:32px;color:var(--text-muted);padding-top:10px;">–</div>
-        <div>
-          <div style="font-size:13px;color:var(--text-muted);" id="recap-away-name">Away</div>
-          <div style="font-size:48px;font-weight:700;" id="recap-away-score">0</div>
-        </div>
+        <div><div style="font-size:13px;color:var(--text-muted);" id="recap-away-name">Away</div><div style="font-size:48px;font-weight:700;" id="recap-away-score">0</div></div>
       </div>
-      <div id="recap-mvp" style="font-size:13px;color:var(--text-muted);margin-bottom:24px;"></div>
       <div style="display:flex;gap:12px;justify-content:center;">
         <a href="dashboard.html" class="btn btn-primary" style="text-decoration:none;">Back to dashboard</a>
         <button class="btn" onclick="startNewGame()">New game</button>
@@ -146,31 +154,73 @@
     import { renderNav } from "./js/app.js";
     import { requireCommissioner } from "./js/auth.js";
     import { db } from "./js/firebase-config.js";
-    import { collection, getDocs, addDoc, doc, updateDoc, increment } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+    import { collection, getDocs, addDoc, doc, updateDoc, setDoc, deleteDoc, increment, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
     requireCommissioner();
     renderNav("scoreboard");
 
     const CATEGORIES = ["Movies & TV","Geography","General Knowledge","Mystery","Football","Basketball","Music","History","Who's Closer","Niche"];
+
     let gameState = {
       homeTeam: null, awayTeam: null,
       homeScore: 0, awayScore: 0,
       homePlayers: [], awayPlayers: [],
       usedCategories: [],
       currentCategory: null,
-      currentTurn: "home",
+      currentQuestionIndex: 0,
+      currentTurn: "home", // who is answering
+      pickerTurn: "home",  // who picks the category
       timerInterval: null,
       timeLeft: 30,
-      powerups: {
-        home: { double: true, phone: true, dip: true },
-        away: { double: true, phone: true, dip: true }
-      },
-      week: 1,
-      emcee: "",
-      matchupId: null
+      powerups: { home: { double: true, phone: true, dip: true }, away: { double: true, phone: true, dip: true } },
+      week: 1, emcee: "", liveGameId: null,
+      weekQuestions: {},
+      currentQuestionData: null
     };
 
-    // Load teams for setup
+    let firstTeam = null;
+
+    // Coin flip
+    window.flipCoin = function() {
+      const btn = document.getElementById("coin-btn");
+      btn.textContent = "🪙";
+      let flips = 0;
+      const interval = setInterval(() => {
+        btn.textContent = flips % 2 === 0 ? "H" : "T";
+        flips++;
+        if (flips > 12) {
+          clearInterval(interval);
+          const result = Math.random() > 0.5 ? "heads" : "tails";
+          btn.textContent = result === "heads" ? "H" : "T";
+          document.getElementById("coin-result").textContent = `${result.charAt(0).toUpperCase() + result.slice(1)}! Who goes first?`;
+          document.getElementById("pick-home").style.display = "block";
+          document.getElementById("pick-away").style.display = "block";
+          updatePickLabels();
+        }
+      }, 80);
+    };
+
+    function updatePickLabels() {
+      const homeOpt = document.getElementById("setup-home").selectedOptions[0];
+      const awayOpt = document.getElementById("setup-away").selectedOptions[0];
+      document.getElementById("pick-home-label").textContent = `${homeOpt?.dataset?.name || "Home"} goes first`;
+      document.getElementById("pick-away-label").textContent = `${awayOpt?.dataset?.name || "Away"} goes first`;
+    }
+
+    document.getElementById("setup-home").addEventListener("change", updatePickLabels);
+    document.getElementById("setup-away").addEventListener("change", updatePickLabels);
+
+    window.setFirstTeam = function(side) {
+      firstTeam = side;
+      const teamName = side === "home"
+        ? document.getElementById("setup-home").selectedOptions[0]?.dataset?.name
+        : document.getElementById("setup-away").selectedOptions[0]?.dataset?.name;
+      document.getElementById("first-team-set").style.display = "block";
+      document.getElementById("first-team-set").textContent = `✓ ${teamName} goes first`;
+      document.getElementById("pick-home").style.display = "none";
+      document.getElementById("pick-away").style.display = "none";
+    };
+
     async function loadTeams() {
       const snap = await getDocs(collection(db, "teams"));
       const teams = [];
@@ -178,10 +228,12 @@
       const homeEl = document.getElementById("setup-home");
       const awayEl = document.getElementById("setup-away");
       teams.forEach(t => {
-        homeEl.innerHTML += `<option value="${t.id}" data-name="${t.name}" data-players='${JSON.stringify(t.players||[])}'>${t.name}</option>`;
-        awayEl.innerHTML += `<option value="${t.id}" data-name="${t.name}" data-players='${JSON.stringify(t.players||[])}'>${t.name}</option>`;
+        const opt = `<option value="${t.id}" data-name="${t.name}" data-players='${JSON.stringify(t.players||[])}' data-niche="${t.niche||''}">${t.name}</option>`;
+        homeEl.innerHTML += opt;
+        awayEl.innerHTML += opt;
       });
       if (teams.length > 1) awayEl.selectedIndex = 1;
+      updatePickLabels();
     }
     loadTeams();
 
@@ -190,24 +242,70 @@
     async function startGame() {
       const homeOpt = document.getElementById("setup-home").selectedOptions[0];
       const awayOpt = document.getElementById("setup-away").selectedOptions[0];
+      const err = document.getElementById("setup-error");
       if (homeOpt.value === awayOpt.value) {
-        document.getElementById("setup-error").textContent = "Home and away team must be different.";
-        document.getElementById("setup-error").style.display = "block";
-        return;
+        err.textContent = "Home and away team must be different."; err.style.display = "block"; return;
       }
-      gameState.homeTeam = { id: homeOpt.value, name: homeOpt.dataset.name, players: JSON.parse(homeOpt.dataset.players || "[]") };
-      gameState.awayTeam = { id: awayOpt.value, name: awayOpt.dataset.name, players: JSON.parse(awayOpt.dataset.players || "[]") };
+      if (!firstTeam) {
+        err.textContent = "Please flip the coin and select who goes first."; err.style.display = "block"; return;
+      }
+      err.style.display = "none";
+
+      gameState.homeTeam = { id: homeOpt.value, name: homeOpt.dataset.name, players: JSON.parse(homeOpt.dataset.players||"[]"), niche: homeOpt.dataset.niche };
+      gameState.awayTeam = { id: awayOpt.value, name: awayOpt.dataset.name, players: JSON.parse(awayOpt.dataset.players||"[]"), niche: awayOpt.dataset.niche };
       gameState.emcee = document.getElementById("setup-emcee").value || "Emcee";
       gameState.week = parseInt(document.getElementById("setup-week").value) || 1;
-      gameState.homePlayers = (gameState.homeTeam.players || []).map(p => ({ name: p, pts: 0, ast: 0, stl: 0 }));
-      gameState.awayPlayers = (gameState.awayTeam.players || []).map(p => ({ name: p, pts: 0, ast: 0, stl: 0 }));
+      gameState.pickerTurn = firstTeam;
+      gameState.currentTurn = firstTeam;
+      gameState.homePlayers = (gameState.homeTeam.players||[]).map(p => ({ name: p, pts:0, ast:0, stl:0 }));
+      gameState.awayPlayers = (gameState.awayTeam.players||[]).map(p => ({ name: p, pts:0, ast:0, stl:0 }));
+
+      // Load this week's questions
+      const qSnap = await getDoc(doc(db, "weeklyQuestions", `week${gameState.week}`));
+      gameState.weekQuestions = qSnap.exists() ? qSnap.data() : {};
+
+      // Create live game doc for spectators
+      const liveRef = await addDoc(collection(db, "liveGames"), {
+        active: true,
+        homeTeam: gameState.homeTeam.name,
+        awayTeam: gameState.awayTeam.name,
+        homeScore: 0, awayScore: 0,
+        week: gameState.week,
+        emcee: gameState.emcee,
+        homePlayers: gameState.homePlayers,
+        awayPlayers: gameState.awayPlayers,
+        currentCategory: null,
+        currentQuestion: null,
+        whoseTurn: "",
+        usedCategories: [],
+        timeLeft: 30,
+        startedAt: new Date().toISOString()
+      });
+      gameState.liveGameId = liveRef.id;
 
       document.getElementById("setup-screen").style.display = "none";
       document.getElementById("live-screen").style.display = "block";
-
       renderScoreboard();
       buildCategoryGrid();
       renderPlayers();
+      pushLiveState();
+    }
+
+    async function pushLiveState() {
+      if (!gameState.liveGameId) return;
+      await updateDoc(doc(db, "liveGames", gameState.liveGameId), {
+        homeScore: gameState.homeScore,
+        awayScore: gameState.awayScore,
+        currentCategory: gameState.currentCategory,
+        currentQuestion: gameState.currentQuestionData?.question || null,
+        whoseTurn: gameState.currentTurn === "home"
+          ? `${gameState.homeTeam.name} answering`
+          : `${gameState.awayTeam.name} answering`,
+        usedCategories: gameState.usedCategories,
+        timeLeft: gameState.timeLeft,
+        homePlayers: gameState.homePlayers,
+        awayPlayers: gameState.awayPlayers
+      });
     }
 
     function renderScoreboard() {
@@ -216,21 +314,23 @@
       document.getElementById("home-score").textContent = gameState.homeScore;
       document.getElementById("away-score").textContent = gameState.awayScore;
       document.getElementById("sb-meta").textContent = `Week ${gameState.week} · ${gameState.homeTeam.name} vs ${gameState.awayTeam.name} · Emcee: ${gameState.emcee}`;
-      document.getElementById("pu-label-home").textContent = `${gameState.homeTeam.name} power-ups`;
-      document.getElementById("pu-label-away").textContent = `${gameState.awayTeam.name} power-ups`;
       document.getElementById("home-players-label").textContent = gameState.homeTeam.name;
       document.getElementById("away-players-label").textContent = gameState.awayTeam.name;
-
       const hs = gameState.homeScore, as = gameState.awayScore;
       document.getElementById("home-score").className = "sb-score" + (hs > as ? " leading" : "");
       document.getElementById("away-score").className = "sb-score" + (as > hs ? " leading" : "");
+      const picker = gameState.pickerTurn === "home" ? gameState.homeTeam.name : gameState.awayTeam.name;
+      document.getElementById("turn-indicator").textContent = picker;
     }
 
     function buildCategoryGrid() {
       const grid = document.getElementById("cat-grid");
       grid.innerHTML = CATEGORIES.map(cat => {
         const used = gameState.usedCategories.includes(cat);
-        return `<button onclick="selectCategory('${cat}')" style="background:${used?'#1a2535':'#1e3a2a'};border:0.5px solid ${used?'#2a3a4a':'#2d6b35'};color:${used?'#3a4a5a':'#5DCAA5'};font-size:11px;padding:6px 12px;border-radius:6px;cursor:${used?'not-allowed':'pointer'};${used?'text-decoration:line-through;':''}">${cat}</button>`;
+        const hasQ = !!(gameState.weekQuestions[cat]?.length);
+        return `<button onclick="selectCategory('${cat}')" style="background:${used?'#1a2535':'#1e3a2a'};border:0.5px solid ${used?'#2a3a4a':'#2d6b35'};color:${used?'#3a4a5a':'#5DCAA5'};font-size:11px;padding:6px 12px;border-radius:6px;cursor:${used?'not-allowed':'pointer'};${used?'text-decoration:line-through;':''}${!hasQ&&!used?' opacity:0.6;':''}">
+          ${cat}${!hasQ&&!used?' ⚠️':''}
+        </button>`;
       }).join("");
       const remaining = CATEGORIES.filter(c => !gameState.usedCategories.includes(c));
       document.getElementById("remaining-cats").textContent = "Remaining: " + (remaining.join(" · ") || "All done!");
@@ -239,13 +339,34 @@
     window.selectCategory = function(cat) {
       if (gameState.usedCategories.includes(cat)) return;
       gameState.currentCategory = cat;
+      gameState.currentQuestionIndex = gameState.currentTurn === "home" ? 0 : 1;
+
+      const qs = gameState.weekQuestions[cat] || [];
+      const qData = qs[gameState.currentQuestionIndex] || null;
+      gameState.currentQuestionData = qData;
+
       document.getElementById("sb-cat-pill").textContent = cat.toUpperCase();
+      document.getElementById("sb-question").textContent = qData ? qData.question : `[No question loaded for ${cat} — type one live]`;
+      document.getElementById("sb-answer").textContent = qData?.answer ? `Answer: ${qData.answer}` : "";
+
       const turnTeam = gameState.currentTurn === "home" ? gameState.homeTeam.name : gameState.awayTeam.name;
       const otherTeam = gameState.currentTurn === "home" ? gameState.awayTeam.name : gameState.homeTeam.name;
-      document.getElementById("sb-question").textContent = `[${cat}] — Enter question here`;
       document.getElementById("sb-whose-turn").textContent = `${turnTeam} answering · steal available to ${otherTeam} if wrong`;
+
+      // Update power-up display for current team
+      updatePowerupDisplay();
       startTimer();
+      pushLiveState();
     };
+
+    function updatePowerupDisplay() {
+      const side = gameState.currentTurn;
+      const pu = gameState.powerups[side];
+      document.getElementById("pu-turn-label").textContent = `${side === "home" ? gameState.homeTeam.name : gameState.awayTeam.name} power-ups`;
+      document.getElementById("pu-double").className = "pu-chip" + (pu.double ? " avail" : " used");
+      document.getElementById("pu-phone").className = "pu-chip" + (pu.phone ? " avail" : " used");
+      document.getElementById("pu-dip").className = "pu-chip" + (pu.dip ? " avail" : " used");
+    }
 
     function startTimer() {
       clearInterval(gameState.timerInterval);
@@ -254,43 +375,60 @@
       gameState.timerInterval = setInterval(() => {
         gameState.timeLeft--;
         updateTimer();
-        if (gameState.timeLeft <= 0) {
-          clearInterval(gameState.timerInterval);
-          document.getElementById("sb-timer").style.color = "#e07070";
-        }
+        if (gameState.timeLeft % 5 === 0) pushLiveState();
+        if (gameState.timeLeft <= 0) clearInterval(gameState.timerInterval);
       }, 1000);
     }
 
     function updateTimer() {
       document.getElementById("sb-timer").textContent = gameState.timeLeft;
       const pct = (gameState.timeLeft / 30) * 100;
-      document.getElementById("timer-bar").style.width = pct + "%";
-      document.getElementById("timer-bar2").style.width = pct + "%";
       const color = gameState.timeLeft > 10 ? "#5DCAA5" : gameState.timeLeft > 5 ? "#EF9F27" : "#e07070";
+      document.getElementById("timer-bar").style.width = pct + "%";
       document.getElementById("timer-bar").style.background = color;
+      document.getElementById("timer-bar2").style.width = pct + "%";
       document.getElementById("timer-bar2").style.background = color;
       document.getElementById("sb-timer").style.color = color;
     }
 
-    window.awardPoint = function(side) {
+    window.awardPoint = function(who) {
       clearInterval(gameState.timerInterval);
       if (!gameState.currentCategory) return;
-      if (side === "home") { gameState.homeScore++; }
-      else { gameState.awayScore++; }
+      const scorer = who === "current" ? gameState.currentTurn : (gameState.currentTurn === "home" ? "away" : "home");
+      if (scorer === "home") gameState.homeScore++;
+      else gameState.awayScore++;
+
+      // Track question stats
+      if (gameState.currentQuestionData) {
+        const cat = gameState.currentCategory;
+        const qs = gameState.weekQuestions[cat] || [];
+        const idx = gameState.currentQuestionIndex;
+        if (qs[idx]) {
+          qs[idx].timesAsked = (qs[idx].timesAsked||0) + 1;
+          if (who === "current") qs[idx].timesCorrect = (qs[idx].timesCorrect||0) + 1;
+        }
+      }
+
       gameState.usedCategories.push(gameState.currentCategory);
       gameState.currentCategory = null;
-      gameState.currentTurn = gameState.currentTurn === "home" ? "away" : "home";
+      gameState.currentQuestionData = null;
+      // Alternate: scorer's team picks next category, other team answers
+      gameState.pickerTurn = scorer;
+      gameState.currentTurn = scorer === "home" ? "away" : "home";
       renderScoreboard();
       buildCategoryGrid();
       document.getElementById("sb-whose-turn").textContent = "Point awarded — select next category";
       document.getElementById("sb-question").textContent = "Select a category to continue";
+      document.getElementById("sb-answer").textContent = "";
       document.getElementById("sb-cat-pill").textContent = "Select a category";
+      renderPlayers();
+      pushLiveState();
     };
 
     window.markWrong = function() {
       clearInterval(gameState.timerInterval);
-      document.getElementById("sb-whose-turn").textContent = "Wrong — steal opportunity for " +
-        (gameState.currentTurn === "home" ? gameState.awayTeam.name : gameState.homeTeam.name);
+      const stealTeam = gameState.currentTurn === "home" ? gameState.awayTeam.name : gameState.homeTeam.name;
+      document.getElementById("sb-whose-turn").textContent = `Wrong — steal opportunity for ${stealTeam}`;
       gameState.timeLeft = 15;
       startTimer();
     };
@@ -299,9 +437,13 @@
       clearInterval(gameState.timerInterval);
       if (gameState.currentCategory) gameState.usedCategories.push(gameState.currentCategory);
       gameState.currentCategory = null;
+      gameState.currentQuestionData = null;
       gameState.currentTurn = gameState.currentTurn === "home" ? "away" : "home";
+      gameState.pickerTurn = gameState.currentTurn;
       buildCategoryGrid();
+      renderScoreboard();
       document.getElementById("sb-question").textContent = "Select a category to continue";
+      document.getElementById("sb-answer").textContent = "";
       document.getElementById("sb-cat-pill").textContent = "Select a category";
       document.getElementById("sb-whose-turn").textContent = "—";
       document.getElementById("sb-timer").textContent = "30";
@@ -309,42 +451,51 @@
       document.getElementById("timer-bar2").style.width = "100%";
     };
 
-    window.usePowerup = function(side, type) {
+    window.usePowerup = function(type) {
+      const side = gameState.currentTurn;
       if (!gameState.powerups[side][type]) return;
       gameState.powerups[side][type] = false;
-      const el = document.getElementById(`pu-${side}-${type}`);
-      if (el) { el.classList.remove("avail"); el.classList.add("used"); }
+      updatePowerupDisplay();
     };
 
     function renderPlayers() {
-      const renderList = (players, containerId) => {
+      const render = (players, containerId, side) => {
         document.getElementById(containerId).innerHTML = players.length
-          ? players.map((p,i) => `
+          ? players.map((p, i) => `
             <div class="player-row">
               <span class="player-name">${p.name}</span>
               <div class="player-stats">
-                <span class="pstat">⭐ <span id="${containerId}-pts-${i}">${p.pts}</span></span>
-                <span class="pstat">❤️ <span id="${containerId}-ast-${i}">${p.ast}</span></span>
-                <span class="pstat">⚡ <span id="${containerId}-stl-${i}">${p.stl}</span></span>
-                <button onclick="addStat('${containerId}',${i},'pts')" style="background:#1a2535;border:0.5px solid #2a3a4a;color:#5DCAA5;font-size:10px;padding:2px 6px;border-radius:4px;cursor:pointer;">+</button>
+                <span class="pstat">⭐ <span>${p.pts}</span></span>
+                <span class="pstat">❤️ <span>${p.ast}</span></span>
+                <span class="pstat">⚡ <span>${p.stl}</span></span>
+              </div>
+              <div style="display:flex;gap:4px;margin-left:6px;">
+                <button onclick="addStat('${side}',${i},'pts')" style="background:#1a2535;border:0.5px solid #2a3a4a;color:#5DCAA5;font-size:9px;padding:2px 5px;border-radius:3px;cursor:pointer;">P</button>
+                <button onclick="addStat('${side}',${i},'ast')" style="background:#1a2535;border:0.5px solid #2a3a4a;color:#e8b04a;font-size:9px;padding:2px 5px;border-radius:3px;cursor:pointer;">A</button>
+                <button onclick="addStat('${side}',${i},'stl')" style="background:#1a2535;border:0.5px solid #2a3a4a;color:#e07070;font-size:9px;padding:2px 5px;border-radius:3px;cursor:pointer;">S</button>
               </div>
             </div>`).join("")
-          : `<div style="font-size:12px;color:#3a4a5a;">No players registered</div>`;
+          : `<div style="font-size:12px;color:#3a4a5a;">No players</div>`;
       };
-      renderList(gameState.homePlayers, "home-players");
-      renderList(gameState.awayPlayers, "away-players");
+      render(gameState.homePlayers, "home-players", "home");
+      render(gameState.awayPlayers, "away-players", "away");
     }
 
     window.addStat = function(side, idx, stat) {
-      const arr = side === "home-players" ? gameState.homePlayers : gameState.awayPlayers;
+      const arr = side === "home" ? gameState.homePlayers : gameState.awayPlayers;
       arr[idx][stat]++;
-      const el = document.getElementById(`${side}-${stat}-${idx}`);
-      if (el) el.textContent = arr[idx][stat];
+      renderPlayers();
+      pushLiveState();
     };
 
     window.endSession = async function() {
       clearInterval(gameState.timerInterval);
       try {
+        // Save updated question stats back
+        if (Object.keys(gameState.weekQuestions).length) {
+          await setDoc(doc(db, "weeklyQuestions", `week${gameState.week}`), gameState.weekQuestions, { merge: true });
+        }
+
         await addDoc(collection(db, "matchups"), {
           homeTeam: gameState.homeTeam.name,
           awayTeam: gameState.awayTeam.name,
@@ -355,15 +506,24 @@
           completed: true,
           completedAt: new Date().toISOString()
         });
-        const winner = gameState.homeScore > gameState.awayScore ? "home" : "away";
+
+        const winner = gameState.homeScore >= gameState.awayScore ? "home" : "away";
         const loser = winner === "home" ? "away" : "home";
-        const winTeam = gameState[`${winner}Team`];
-        const loseTeam = gameState[`${loser}Team`];
-        if (winTeam.id) {
-          await updateDoc(doc(db, "teams", winTeam.id), { wins: increment(1), pointsFor: increment(gameState[`${winner}Score`]), pointsAgainst: increment(gameState[`${loser}Score`]), streak: increment(1) });
+        if (gameState[`${winner}Team`].id) {
+          await updateDoc(doc(db, "teams", gameState[`${winner}Team`].id), {
+            wins: increment(1), pointsFor: increment(gameState[`${winner}Score`]),
+            pointsAgainst: increment(gameState[`${loser}Score`]), streak: increment(1)
+          });
         }
-        if (loseTeam.id) {
-          await updateDoc(doc(db, "teams", loseTeam.id), { losses: increment(1), pointsFor: increment(gameState[`${loser}Score`]), pointsAgainst: increment(gameState[`${winner}Score`]), streak: -1 });
+        if (gameState[`${loser}Team`].id) {
+          await updateDoc(doc(db, "teams", gameState[`${loser}Team`].id), {
+            losses: increment(1), pointsFor: increment(gameState[`${loser}Score`]),
+            pointsAgainst: increment(gameState[`${winner}Score`]), streak: -1
+          });
+        }
+
+        if (gameState.liveGameId) {
+          await updateDoc(doc(db, "liveGames", gameState.liveGameId), { active: false });
         }
       } catch(e) { console.error(e); }
 
@@ -380,7 +540,12 @@
     window.startNewGame = function() {
       document.getElementById("recap-screen").style.display = "none";
       document.getElementById("setup-screen").style.display = "block";
-      gameState = { homeTeam:null,awayTeam:null,homeScore:0,awayScore:0,homePlayers:[],awayPlayers:[],usedCategories:[],currentCategory:null,currentTurn:"home",timerInterval:null,timeLeft:30,powerups:{home:{double:true,phone:true,dip:true},away:{double:true,phone:true,dip:true}},week:1,emcee:"",matchupId:null };
+      firstTeam = null;
+      document.getElementById("coin-btn").textContent = "🪙";
+      document.getElementById("coin-result").textContent = "";
+      document.getElementById("first-team-set").style.display = "none";
+      document.getElementById("pick-home").style.display = "none";
+      document.getElementById("pick-away").style.display = "none";
     };
   </script>
 </body>

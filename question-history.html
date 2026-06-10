@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Question History — The Savant Trivia</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="main-nav"></div>
+  <div class="ticker">QUESTION HISTORY &nbsp;·&nbsp; Every question ever asked &nbsp;·&nbsp; Filter by category</div>
+
+  <div class="page-wrap">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Question history</div>
+        <div class="page-subtitle" id="q-subtitle">All questions across all seasons</div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;" id="cat-filters">
+      <button class="cat-filter active" data-cat="all">All</button>
+    </div>
+
+    <div class="card">
+      <table>
+        <thead>
+          <tr>
+            <th>Question</th>
+            <th style="width:120px;">Category</th>
+            <th style="text-align:right;width:60px;">Week</th>
+            <th style="text-align:right;width:80px;">% Correct</th>
+          </tr>
+        </thead>
+        <tbody id="questions-body">
+          <tr><td colspan="4" style="text-align:center;padding:24px;color:var(--text-muted);">Loading questions...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <style>
+    .cat-filter {
+      font-size:11px;font-weight:500;padding:5px 12px;border-radius:20px;
+      border:0.5px solid var(--border);background:#fff;color:var(--text-muted);cursor:pointer;
+    }
+    .cat-filter.active { background:var(--navy);color:#fff;border-color:var(--navy); }
+  </style>
+
+  <script type="module">
+    import { renderNav } from "./js/app.js";
+    import { db } from "./js/firebase-config.js";
+    import { collection, getDocs } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    renderNav("question-history");
+
+    const CATEGORIES = [
+      "Movies & TV","Geography","General Knowledge","Mystery",
+      "Football","Basketball","Music","History","Who's Closer","Niche"
+    ];
+    const PILL_COLORS = {
+      "Movies & TV":"pill-teal","Geography":"pill-blue","General Knowledge":"pill-gold",
+      "Mystery":"pill-gray","Football":"pill-green","Basketball":"pill-teal",
+      "Music":"pill-blue","History":"pill-gold","Who's Closer":"pill-gray","Niche":"pill-green"
+    };
+
+    let allQuestions = [];
+    let activeFilter = "all";
+
+    // Build filter buttons
+    const filterContainer = document.getElementById("cat-filters");
+    CATEGORIES.forEach(cat => {
+      const btn = document.createElement("button");
+      btn.className = "cat-filter";
+      btn.dataset.cat = cat;
+      btn.textContent = cat;
+      filterContainer.appendChild(btn);
+    });
+
+    filterContainer.addEventListener("click", e => {
+      if (!e.target.classList.contains("cat-filter")) return;
+      document.querySelectorAll(".cat-filter").forEach(b => b.classList.remove("active"));
+      e.target.classList.add("active");
+      activeFilter = e.target.dataset.cat;
+      renderTable();
+    });
+
+    async function loadQuestions() {
+      const snap = await getDocs(collection(db, "weeklyQuestions"));
+      allQuestions = [];
+      snap.forEach(d => {
+        const data = d.data();
+        const week = data.week || "?";
+        CATEGORIES.forEach(cat => {
+          const qs = data[cat] || [];
+          qs.forEach(q => {
+            if (q.question) allQuestions.push({ ...q, week, category: cat });
+          });
+        });
+      });
+      allQuestions.sort((a, b) => (b.week || 0) - (a.week || 0));
+      document.getElementById("q-subtitle").textContent = `${allQuestions.length} questions across all weeks`;
+      renderTable();
+    }
+
+    function renderTable() {
+      const filtered = activeFilter === "all"
+        ? allQuestions
+        : allQuestions.filter(q => q.category === activeFilter);
+
+      if (!filtered.length) {
+        document.getElementById("questions-body").innerHTML =
+          `<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--text-muted);">No questions found${activeFilter !== "all" ? ` for ${activeFilter}` : ""}.</td></tr>`;
+        return;
+      }
+
+      document.getElementById("questions-body").innerHTML = filtered.map(q => {
+        const pct = q.timesAsked > 0 ? Math.round((q.timesCorrect / q.timesAsked) * 100) : null;
+        const pctDisplay = pct !== null ? `${pct}%` : "—";
+        const pctColor = pct !== null ? (pct >= 70 ? "color:#3B6D11;" : pct <= 30 ? "color:#A32D2D;" : "") : "";
+        return `<tr>
+          <td>
+            <div style="font-size:13px;">${q.question}</div>
+            ${q.answer ? `<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">Answer: ${q.answer}</div>` : ""}
+          </td>
+          <td><span class="pill ${PILL_COLORS[q.category]||'pill-gray'}">${q.category}</span></td>
+          <td style="text-align:right;font-size:12px;color:var(--text-muted);">Wk ${q.week}</td>
+          <td style="text-align:right;font-size:13px;font-weight:500;${pctColor}">${pctDisplay}</td>
+        </tr>`;
+      }).join("");
+    }
+
+    loadQuestions();
+  </script>
+</body>
+</html>

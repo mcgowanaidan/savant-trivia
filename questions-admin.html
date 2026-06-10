@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Load Questions — The Savant Trivia</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="main-nav"></div>
+  <div class="ticker">QUESTION LOADER &nbsp;·&nbsp; Load 2 questions per category before each week's games</div>
+
+  <div class="page-wrap">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Weekly question loader</div>
+        <div class="page-subtitle">Questions apply to all games this week. 2 per category — one per team.</div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;">
+        <select class="form-select" id="week-select" style="width:auto;">
+          <option value="1">Week 1</option><option value="2">Week 2</option>
+          <option value="3">Week 3</option><option value="4">Week 4</option>
+          <option value="5">Week 5</option><option value="6">Week 6</option>
+          <option value="7">Week 7</option><option value="8">Week 8</option>
+          <option value="9">Week 9</option><option value="10">Week 10</option>
+        </select>
+        <button class="btn btn-primary" id="save-all-btn">Save all questions</button>
+      </div>
+    </div>
+
+    <div id="questions-grid" style="display:flex;flex-direction:column;gap:16px;"></div>
+
+    <div id="save-success" style="display:none;background:#EAF3DE;border:0.5px solid #97C459;border-radius:var(--radius);padding:12px 16px;font-size:13px;color:#3B6D11;margin-top:16px;text-align:center;">
+      Questions saved for this week!
+    </div>
+  </div>
+
+  <script type="module">
+    import { renderNav } from "./js/app.js";
+    import { requireCommissioner } from "./js/auth.js";
+    import { db } from "./js/firebase-config.js";
+    import { doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    requireCommissioner();
+    renderNav("questions-admin");
+
+    const CATEGORIES = [
+      "Movies & TV", "Geography", "General Knowledge", "Mystery",
+      "Football", "Basketball", "Music", "History", "Who's Closer", "Niche"
+    ];
+
+    const PILL_COLORS = {
+      "Movies & TV": "pill-teal", "Geography": "pill-blue",
+      "General Knowledge": "pill-gold", "Mystery": "pill-gray",
+      "Football": "pill-green", "Basketball": "pill-teal",
+      "Music": "pill-blue", "History": "pill-gold",
+      "Who's Closer": "pill-gray", "Niche": "pill-green"
+    };
+
+    let currentWeek = 1;
+
+    function buildGrid() {
+      const grid = document.getElementById("questions-grid");
+      grid.innerHTML = CATEGORIES.map(cat => `
+        <div class="card">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+            <span class="pill ${PILL_COLORS[cat]}" style="font-size:11px;padding:3px 10px;">${cat}</span>
+            ${cat === "Who's Closer" ? '<span style="font-size:11px;color:var(--text-muted);">3 questions — best of 3 rounds</span>' : '<span style="font-size:11px;color:var(--text-muted);">2 questions — one per team</span>'}
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <div>
+              <label class="form-label" style="font-size:11px;color:var(--text-muted);">Question 1 (Home team)</label>
+              <input type="text" class="form-input" id="q-${sanitize(cat)}-1" placeholder="Enter question..." />
+              <input type="text" class="form-input" style="margin-top:6px;" id="a-${sanitize(cat)}-1" placeholder="Answer..." />
+            </div>
+            <div>
+              <label class="form-label" style="font-size:11px;color:var(--text-muted);">Question 2 (Away team)</label>
+              <input type="text" class="form-input" id="q-${sanitize(cat)}-2" placeholder="Enter question..." />
+              <input type="text" class="form-input" style="margin-top:6px;" id="a-${sanitize(cat)}-2" placeholder="Answer..." />
+            </div>
+            ${cat === "Who's Closer" ? `
+            <div>
+              <label class="form-label" style="font-size:11px;color:var(--text-muted);">Question 3 (Tiebreaker)</label>
+              <input type="text" class="form-input" id="q-${sanitize(cat)}-3" placeholder="Enter question..." />
+              <input type="text" class="form-input" style="margin-top:6px;" id="a-${sanitize(cat)}-3" placeholder="Answer..." />
+            </div>` : ""}
+          </div>
+        </div>`).join("");
+    }
+
+    function sanitize(str) {
+      return str.replace(/[^a-zA-Z0-9]/g, "_");
+    }
+
+    async function loadExisting() {
+      const snap = await getDoc(doc(db, "weeklyQuestions", `week${currentWeek}`));
+      if (!snap.exists()) return;
+      const data = snap.data();
+      CATEGORIES.forEach(cat => {
+        const key = sanitize(cat);
+        const qs = data[cat] || [];
+        qs.forEach((q, i) => {
+          const qi = document.getElementById(`q-${key}-${i+1}`);
+          const ai = document.getElementById(`a-${key}-${i+1}`);
+          if (qi) qi.value = q.question || "";
+          if (ai) ai.value = q.answer || "";
+        });
+      });
+    }
+
+    document.getElementById("week-select").addEventListener("change", e => {
+      currentWeek = parseInt(e.target.value);
+      loadExisting();
+    });
+
+    document.getElementById("save-all-btn").addEventListener("click", async () => {
+      const data = {};
+      CATEGORIES.forEach(cat => {
+        const key = sanitize(cat);
+        const count = cat === "Who's Closer" ? 3 : 2;
+        data[cat] = [];
+        for (let i = 1; i <= count; i++) {
+          const q = document.getElementById(`q-${key}-${i}`)?.value.trim() || "";
+          const a = document.getElementById(`a-${key}-${i}`)?.value.trim() || "";
+          if (q) data[cat].push({ question: q, answer: a, category: cat, week: currentWeek, timesAsked: 0, timesCorrect: 0 });
+        }
+      });
+      await setDoc(doc(db, "weeklyQuestions", `week${currentWeek}`), { ...data, week: currentWeek, savedAt: new Date().toISOString() });
+      const s = document.getElementById("save-success");
+      s.style.display = "block";
+      setTimeout(() => s.style.display = "none", 3000);
+    });
+
+    buildGrid();
+    loadExisting();
+  </script>
+</body>
+</html>
