@@ -39,6 +39,10 @@
         <label class="form-label">Week number</label>
         <input type="number" class="form-input" id="setup-week" value="1" min="1" max="18" />
       </div>
+      <div class="form-group">
+        <label class="form-label">Zoom / call link <span style="font-size:11px;color:var(--text-muted);font-weight:400;">(optional — players will see a Join call button)</span></label>
+        <input type="url" class="form-input" id="setup-zoom" placeholder="https://zoom.us/j/..." />
+      </div>
 
       <div style="border-top:1px solid var(--border);margin:20px 0;padding-top:20px;">
         <div style="font-size:13px;font-weight:600;margin-bottom:4px;">Coin flip — who goes first?</div>
@@ -175,7 +179,8 @@
       powerups: { home: { double: true, phone: true, dip: true }, away: { double: true, phone: true, dip: true } },
       week: 1, emcee: "", liveGameId: null,
       weekQuestions: {},
-      currentQuestionData: null
+      currentQuestionData: null,
+      zoomLink: ""
     };
 
     let firstTeam = null;
@@ -255,6 +260,7 @@
       gameState.awayTeam = { id: awayOpt.value, name: awayOpt.dataset.name, players: JSON.parse(awayOpt.dataset.players||"[]"), niche: awayOpt.dataset.niche };
       gameState.emcee = document.getElementById("setup-emcee").value || "Emcee";
       gameState.week = parseInt(document.getElementById("setup-week").value) || 1;
+      gameState.zoomLink = document.getElementById("setup-zoom").value.trim();
       gameState.pickerTurn = firstTeam;
       gameState.currentTurn = firstTeam;
       gameState.homePlayers = (gameState.homeTeam.players||[]).map(p => ({ name: p, pts:0, ast:0, stl:0 }));
@@ -272,6 +278,7 @@
         homeScore: 0, awayScore: 0,
         week: gameState.week,
         emcee: gameState.emcee,
+        zoomLink: gameState.zoomLink || "",
         homePlayers: gameState.homePlayers,
         awayPlayers: gameState.awayPlayers,
         currentCategory: null,
