@@ -31,8 +31,11 @@ export function renderNav(activePage) {
       { id: "dashboard", label: "Dashboard", href: "dashboard.html" },
       { id: "standings", label: "Standings", href: "standings.html" },
       { id: "stats", label: "Stats", href: "stats.html" },
+      { id: "historical", label: "Historical", href: "historical.html" },
+      { id: "question-history", label: "Questions", href: "question-history.html" },
       { id: "scoreboard", label: "Scoreboard", href: "scoreboard.html", commissionerOnly: true },
       { id: "schedule", label: "Schedule", href: "schedule.html" },
+      { id: "lets-play", label: "Let's Play", href: "lets-play.html" },
     ];
 
     const tabs = pages
