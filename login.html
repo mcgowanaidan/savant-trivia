@@ -45,10 +45,11 @@
         </div>
         <div class="form-group">
           <label class="form-label">Account type</label>
-          <select class="form-select" id="reg-role">
+          <select class="form-select" id="reg-role" onchange="document.getElementById('role-confirm').textContent = this.options[this.selectedIndex].text;">
             <option value="player">Player</option>
             <option value="commissioner">Commissioner (league organizer)</option>
           </select>
+          <div id="role-confirm" style="font-size:11px;color:var(--gold);margin-top:5px;">Player</div>
         </div>
         <div class="form-error" id="reg-error"></div>
         <button class="btn btn-primary" style="width:100%;margin-top:8px;" id="reg-btn">Create account</button>
@@ -97,10 +98,12 @@
       const name = document.getElementById("reg-name").value.trim();
       const email = document.getElementById("reg-email").value.trim();
       const password = document.getElementById("reg-password").value;
-      const role = document.getElementById("reg-role").value;
+      const roleEl = document.getElementById("reg-role");
+      const role = roleEl.options[roleEl.selectedIndex].value;
       const err = document.getElementById("reg-error");
       err.style.display = "none";
       if (!name || !email || !password) { err.textContent = "Please fill in all fields."; err.style.display = "block"; return; }
+      if (!role) { err.textContent = "Please select an account type."; err.style.display = "block"; return; }
       try {
         await registerUser(email, password, name, role);
         window.location.href = "dashboard.html";
